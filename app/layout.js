@@ -7,6 +7,10 @@ export const metadata = {
   description: "Personal site with auth scaffold"
 };
 
+// Ensure the layout re-renders on each request/navigation so session changes are visible immediately
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function RootLayout({ children }) {
   const session = await getSession();
   const user = session.user;
