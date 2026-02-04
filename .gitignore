@@ -28,11 +28,13 @@ yarn-error.log*
 .env.local
 .env.development
 .env.production
+prisma/.env
 .env.test
 .env*.local
 
 # Vercel
 /.vercel/
+.vercel
 
 # TypeScript
 *.tsbuildinfo
