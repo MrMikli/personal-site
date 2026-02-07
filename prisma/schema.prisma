@@ -104,6 +104,9 @@ model HeatSignup {
   selectedGameId String?
   selectedGame   Game?   @relation("HeatSignupSelectedGame", fields: [selectedGameId], references: [id])
 
+  // Locked per-platform roll targets for this signup (platformId -> count)
+  platformTargets Json?
+
   rolls HeatRoll[]
 
   createdAt DateTime @default(now())
