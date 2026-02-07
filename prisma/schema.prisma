@@ -14,3 +14,37 @@ model User {
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 }
+
+model Platform {
+  id           String   @id @default(cuid())
+  igdbId       Int      @unique
+  name         String
+  abbreviation String?
+  generation   Int?
+
+  games        Game[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Game {
+  id                String     @id @default(cuid())
+  igdbId            Int        @unique
+  name              String
+  slug              String?    @unique
+  coverUrl      String?
+
+  // IGDB first_release_date stored twice as requested
+  releaseDateUnix   Int?       // seconds since epoch
+  releaseDateHuman  String?
+
+  platforms         Platform[]
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([name])
+}
