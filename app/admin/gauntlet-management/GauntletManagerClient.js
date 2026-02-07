@@ -13,10 +13,13 @@ export default function GauntletManagerClient() {
   const [gName, setGName] = useState("");
 
   const [hName, setHName] = useState("");
-  const [hOrder, setHOrder] = useState(1);
   const [hStartsAt, setHStartsAt] = useState("");
   const [hEndsAt, setHEndsAt] = useState("");
   const [hDefaultCount, setHDefaultCount] = useState(1);
+
+  const nextOrder = heats.length
+    ? Math.max(...heats.map((h) => Number(h.order) || 0)) + 1
+    : 1;
 
   async function loadGauntlets() {
     setError("");
@@ -91,7 +94,7 @@ export default function GauntletManagerClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: hName.trim() || null,
-          order: Number(hOrder) || 1,
+          order: nextOrder,
           startsAt: hStartsAt || null,
           endsAt: hEndsAt || null,
           defaultGameCounter: Number(hDefaultCount) || 1,
@@ -101,11 +104,37 @@ export default function GauntletManagerClient() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Failed to create heat");
       setHName("");
-      setHOrder(1);
       setHStartsAt("");
       setHEndsAt("");
       setHDefaultCount(1);
       setSelectedPlatformIds([]);
+      await loadHeats(selectedId);
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateHeat(updatedHeat) {
+    if (!selectedId || !updatedHeat?.id) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/gauntlets/${selectedId}/heats/${updatedHeat.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: updatedHeat.name || null,
+          order: Number(updatedHeat.order) || 1,
+          startsAt: updatedHeat.startsAt || null,
+          endsAt: updatedHeat.endsAt || null,
+          defaultGameCounter: Number(updatedHeat.defaultGameCounter) || 1,
+          platformIds: (updatedHeat.platforms || []).map((p) => p.id)
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Failed to update heat");
       await loadHeats(selectedId);
     } catch (e) {
       setError(String(e.message || e));
@@ -183,14 +212,127 @@ export default function GauntletManagerClient() {
                   <tbody>
                     {heats.map((h) => (
                       <tr key={h.id}>
-                        <td style={{ padding: 8 }}>{h.order}</td>
-                        <td style={{ padding: 8 }}>{h.name || ""}</td>
-                        <td style={{ padding: 8 }}>{h.startsAt ? new Date(h.startsAt).toLocaleDateString() : ""}</td>
-                        <td style={{ padding: 8 }}>{h.endsAt ? new Date(h.endsAt).toLocaleDateString() : ""}</td>
-                        <td style={{ padding: 8 }}>{h.defaultGameCounter}</td>
-                        <td style={{ padding: 8 }}>{(h.platforms || []).map((p) => p.name).join(", ")}</td>
                         <td style={{ padding: 8 }}>
-                          <button onClick={() => deleteHeat(h.id)}>Delete</button>
+                          <input
+                            type="number"
+                            style={{ width: 70 }}
+                            value={h.order ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setHeats((prev) =>
+                                prev.map((row) =>
+                                  row.id === h.id ? { ...row, order: value === "" ? "" : Number(value) } : row
+                                )
+                              );
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: 8 }}>
+                          <input
+                            value={h.name || ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setHeats((prev) =>
+                                prev.map((row) => (row.id === h.id ? { ...row, name: value } : row))
+                              );
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: 8 }}>
+                          <input
+                            type="date"
+                            value={h.startsAt || ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setHeats((prev) =>
+                                prev.map((row) => (row.id === h.id ? { ...row, startsAt: value } : row))
+                              );
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: 8 }}>
+                          <input
+                            type="date"
+                            value={h.endsAt || ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setHeats((prev) =>
+                                prev.map((row) => (row.id === h.id ? { ...row, endsAt: value } : row))
+                              );
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: 8 }}>
+                          <input
+                            type="number"
+                            min={1}
+                            style={{ width: 80 }}
+                            value={h.defaultGameCounter ?? 1}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setHeats((prev) =>
+                                prev.map((row) =>
+                                  row.id === h.id
+                                    ? { ...row, defaultGameCounter: value === "" ? "" : Number(value) }
+                                    : row
+                                )
+                              );
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: 8 }}>
+                          <div style={{ display: "grid", gap: 4 }}>
+                            {platforms.map((p) => {
+                              const checked = (h.platforms || []).some((hp) => hp.id === p.id);
+                              return (
+                                <label
+                                  key={p.id}
+                                  style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      const isChecked = e.target.checked;
+                                      setHeats((prev) =>
+                                        prev.map((row) => {
+                                          if (row.id !== h.id) return row;
+                                          const current = row.platforms || [];
+                                          if (isChecked) {
+                                            if (current.some((hp) => hp.id === p.id)) return row;
+                                            return {
+                                              ...row,
+                                              platforms: [...current, p]
+                                            };
+                                          }
+                                          return {
+                                            ...row,
+                                            platforms: current.filter((hp) => hp.id !== p.id)
+                                          };
+                                        })
+                                      );
+                                    }}
+                                  />
+                                  <span>
+                                    {p.name}
+                                    {p.abbreviation ? ` (${p.abbreviation})` : ""}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </td>
+                        <td style={{ padding: 8 }}>
+                          <button
+                            onClick={() => updateHeat(h)}
+                            disabled={loading}
+                            style={{ marginRight: 8 }}
+                          >
+                            Save
+                          </button>
+                          <button onClick={() => deleteHeat(h.id)} disabled={loading}>
+                            Delete
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -207,8 +349,8 @@ export default function GauntletManagerClient() {
                   <input value={hName} onChange={(e) => setHName(e.target.value)} />
                 </label>
                 <label style={{ display: "grid", gap: 4 }}>
-                  <span>Order</span>
-                  <input type="number" value={hOrder} onChange={(e) => setHOrder(e.target.value)} />
+                  <span>Order (auto)</span>
+                  <input type="number" value={nextOrder} readOnly />
                 </label>
                 <label style={{ display: "grid", gap: 4 }}>
                   <span>Default Game Counter</span>
