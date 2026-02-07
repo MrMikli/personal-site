@@ -172,6 +172,14 @@ export default function ManagePlatformClient({ platforms }) {
 
       {selectedOption && (
         <div style={{ marginTop: 8 }}>
+          <div style={{ marginBottom: 8, fontStyle: 'italic', color: '#555' }}>
+            {selected && (
+              <>
+                Current number of games for {formatName(selected)}: {selected._count?.games ?? 0}
+              </>
+            )}
+          </div>
+
           <button onClick={handleSync} disabled={loading}>
             {loading ? 'Syncing…' : `Sync games for ${formatName(selected || { name: 'selected platform' })}`}
           </button>

@@ -15,7 +15,13 @@ export default async function AdminGameManagementPage() {
   }
 
   const platforms = await prisma.platform.findMany({
-    select: { id: true, igdbId: true, name: true, abbreviation: true },
+    select: {
+      id: true,
+      igdbId: true,
+      name: true,
+      abbreviation: true,
+      _count: { select: { games: true } }
+    },
     orderBy: { name: "asc" }
   });
 
