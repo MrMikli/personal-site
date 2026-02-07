@@ -12,7 +12,7 @@ export default async function ProtectedPage() {
   return (
     <div>
       <h1>Protected</h1>
-      <p>Welcome, {session.user.email}.</p>
+      <p>Welcome, {session.user.username}.</p>
       <p>This page is only visible when logged in.</p>
     </div>
   );

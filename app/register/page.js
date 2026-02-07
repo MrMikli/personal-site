@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 export default function RegisterPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,7 +17,7 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email: email || null, password })
+        body: JSON.stringify({ username, password })
       });
       if (res.ok) {
         router.push('/login');
@@ -38,10 +37,6 @@ export default function RegisterPage() {
         <label>
           Username (required)
           <input type="text" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={32} />
-        </label>
-        <label>
-          Email (optional)
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} />
         </label>
         <label>
           Password (min 8 chars)

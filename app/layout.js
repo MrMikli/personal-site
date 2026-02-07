@@ -26,7 +26,7 @@ export default async function RootLayout({ children }) {
           <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
             {user ? (
               <>
-                <span style={{ opacity: 0.7 }}>Signed in as {user.username || user.email}</span>
+                <span style={{ opacity: 0.7 }}>Signed in as {user.username}</span>
                 <form action="/api/auth/logout" method="post">
                   <button type="submit">Logout</button>
                 </form>

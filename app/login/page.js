@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [identifier, setIdentifier] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,10 +17,12 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password })
+        body: JSON.stringify({ username, password })
       });
       if (res.ok) {
+        // Navigate, then refresh to ensure server components re-read cookies
         router.push('/protected');
+        router.refresh();
       } else {
         const data = await res.json().catch(() => ({ message: 'Login failed' }));
         setError(data.message || 'Login failed');
@@ -35,8 +37,8 @@ export default function LoginPage() {
       <h1>Login</h1>
       <form onSubmit={onSubmit}>
         <label>
-          Email or Username
-          <input type="text" value={identifier} onChange={e => setIdentifier(e.target.value)} required />
+          Username
+          <input type="text" value={username} onChange={e => setUsername(e.target.value)} required />
         </label>
         <label>
           Password
