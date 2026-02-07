@@ -15,7 +15,8 @@ export default async function AdminPage() {
     <div>
       <h1>Admin</h1>
       <ul style={{ display: 'grid', gap: 8, paddingLeft: 0, listStyle: 'none', marginBottom: 16 }}>
-        <li><Link href="/db-status">DB Status</Link></li>
+        <li><Link href="/admin/db-status">DB Status</Link></li>
+        <li><Link href="/admin/db-game-settings">DB Game Settings</Link></li>
       </ul>
       <section>
         <h2>Users</h2>

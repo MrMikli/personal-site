@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { getSession } from '../../lib/session';
+import { getSession } from '../../../lib/session';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DbStatusPage() {
+export default async function AdminDbStatusPage() {
   const session = await getSession();
   if (!session.user?.isAdmin) {
     redirect('/');
