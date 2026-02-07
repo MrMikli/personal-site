@@ -22,7 +22,8 @@ export default function HeatRollClient({
   defaultGameCounter,
   platforms,
   initialRolls,
-  initialTargets
+  initialTargets,
+  initialSelectedGameId
 }) {
   const [rolls, setRolls] = useState(initialRolls || []);
   const hasInitialTargets = initialTargets && Object.keys(initialTargets).length > 0;
@@ -31,6 +32,10 @@ export default function HeatRollClient({
   );
   const [isRolling, setIsRolling] = useState(false);
   const [error, setError] = useState("");
+  const [selectedRollId, setSelectedRollId] = useState(null);
+  const [finalSelectedGameId, setFinalSelectedGameId] = useState(
+    initialSelectedGameId || null
+  );
 
   const [isLocked, setIsLocked] = useState(
     hasInitialTargets || (initialRolls && initialRolls.length > 0)
@@ -129,6 +134,48 @@ export default function HeatRollClient({
         throw new Error(json?.message || "Failed to apply technical veto");
       }
       setRolls((prev) => prev.filter((r) => r.id !== rollId));
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  }
+
+  const isPoolFull = rolls.length >= defaultGameCounter;
+
+  useEffect(() => {
+    if (!isPoolFull || finalSelectedGameId) return;
+    // Default selection to the first roll when pool fills and no final choice yet
+    if (!selectedRollId && rolls[0]) {
+      setSelectedRollId(rolls[0].id);
+    }
+  }, [isPoolFull, finalSelectedGameId, selectedRollId, rolls]);
+
+  async function handleChooseGame() {
+    if (!isPoolFull) {
+      setError("You must roll the full pool before choosing a game.");
+      return;
+    }
+    if (!selectedRollId) {
+      setError("Please select a game from the list before choosing.");
+      return;
+    }
+    try {
+      setError("");
+      const res = await fetch(
+        `/api/gauntlet/heats/${heatId}/selected-game`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rollId: selectedRollId })
+        }
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || "Failed to choose game for this heat");
+      }
+      const chosenGameId = json?.selectedGameId || null;
+      if (chosenGameId) {
+        setFinalSelectedGameId(chosenGameId);
+      }
     } catch (e) {
       setError(String(e.message || e));
     }
@@ -276,24 +323,116 @@ export default function HeatRollClient({
         ) : (
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(10, minmax(0, 1fr))",
-              gap: 12,
-              alignItems: "stretch",
-              justifyItems: "center"
+              display: "flex",
+              justifyContent: "center"
             }}
           >
-            {rolls.map((roll) => (
-              <GameCard
-                key={roll.id}
-                game={roll.game}
-                variant="pool"
-                onTechnicalVeto={() => handleTechnicalVeto(roll.id)}
-              />
-            ))}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                gap: 12,
+                alignItems: "stretch",
+                maxWidth: 5 * 180 // approximate card width plus gap for nicer centering
+              }}
+            >
+              {rolls.map((roll) => (
+                <GameCard
+                  key={roll.id}
+                  game={roll.game}
+                  variant="pool"
+                  onTechnicalVeto={() => handleTechnicalVeto(roll.id)}
+                />
+              ))}
+            </div>
           </div>
         )}
       </section>
+
+      {isPoolFull && (
+        <section
+          aria-label="Choose final game"
+          style={{
+            marginTop: 16,
+            padding: 16,
+            borderRadius: 8,
+            border: "1px solid #ddd",
+            background: "#fafafa",
+            maxWidth: 720,
+            marginLeft: "auto",
+            marginRight: "auto",
+            display: "grid",
+            gap: 12
+          }}
+        >
+          <h3 style={{ margin: 0 , color: "#166534" }}>Final choice for this heat</h3>
+          {finalSelectedGameId ? (
+            <p style={{ margin: 0, color: "#166534" }}>
+              You have chosen your game for this heat.
+            </p>
+          ) : (
+            <>
+              <p style={{ margin: 0, color: "#444" }}>
+                Select one of your rolled games to be your official pick for
+                this heat.
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap"
+                }}
+              >
+                <select
+                  value={selectedRollId || ""}
+                  onChange={(e) => setSelectedRollId(e.target.value || null)}
+                  style={{ minWidth: 260, padding: 4 }}
+                >
+                  <option value="" disabled>
+                    Choose a game
+                  </option>
+                  {rolls.map((roll) => {
+                    const g = roll.game;
+                    const year = g.releaseDateHuman
+                      ? new Date(g.releaseDateHuman).getFullYear()
+                      : null;
+                    const platformsLabel = (g.platforms || [])
+                      .map((p) =>
+                        p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name
+                      )
+                      .join(", ");
+                    const labelParts = [g.name];
+                    if (year) labelParts.push(`(${year})`);
+                    if (platformsLabel) labelParts.push(`- ${platformsLabel}`);
+                    return (
+                      <option key={roll.id} value={roll.id}>
+                        {labelParts.join(" ")}
+                      </option>
+                    );
+                  })}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleChooseGame}
+                  style={{
+                    padding: "6px 16px",
+                    borderRadius: 999,
+                    border: "none",
+                    background: "#166534",
+                    color: "white",
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  Choose
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
     </>
   );
 }

@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum HeatSignupStatus {
+  UNBEATEN
+  BEATEN
+  GIVEN_UP
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique
@@ -103,6 +109,8 @@ model HeatSignup {
   user           User    @relation(fields: [userId], references: [id])
   selectedGameId String?
   selectedGame   Game?   @relation("HeatSignupSelectedGame", fields: [selectedGameId], references: [id])
+
+  status HeatSignupStatus @default(UNBEATEN)
 
   // Locked per-platform roll targets for this signup (platformId -> count)
   platformTargets Json?

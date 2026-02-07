@@ -74,6 +74,14 @@ function pickPlatformIdByRemaining(targets, existingCounts) {
   return null;
 }
 
+function shuffleInPlace(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 export async function POST(request, { params }) {
   const session = await getSession();
   if (!session?.user) {
@@ -166,19 +174,24 @@ export async function POST(request, { params }) {
     ...(existingGameIds.length ? { id: { notIn: existingGameIds } } : {})
   };
 
-  const totalGames = await prisma.game.count({ where });
+  // Fetch all eligible game IDs for this platform (excluding already rolled),
+  // then sample up to 30 uniformly at random for the wheel.
+  const eligibleIds = await prisma.game.findMany({
+    where,
+    select: { id: true }
+  });
+
+  const totalGames = eligibleIds.length;
   if (totalGames === 0) {
     return NextResponse.json({ message: "No eligible games available for this platform" }, { status: 400 });
   }
 
   const take = Math.min(30, totalGames);
-  const maxSkip = Math.max(totalGames - take, 0);
-  const skip = maxSkip > 0 ? Math.floor(Math.random() * (maxSkip + 1)) : 0;
+  const shuffledIds = shuffleInPlace([...eligibleIds]);
+  const sampleIds = shuffledIds.slice(0, take).map((g) => g.id);
 
-  const wheelGames = await prisma.game.findMany({
-    where,
-    skip,
-    take,
+  let wheelGames = await prisma.game.findMany({
+    where: { id: { in: sampleIds } },
     include: {
       platforms: { select: { id: true, name: true, abbreviation: true } }
     }
@@ -188,6 +201,8 @@ export async function POST(request, { params }) {
     return NextResponse.json({ message: "No eligible games available for this platform" }, { status: 400 });
   }
 
+  // Shuffle the wheel for visual randomness and pick the winner uniformly
+  wheelGames = shuffleInPlace(wheelGames);
   const chosenIndex = Math.floor(Math.random() * wheelGames.length);
   const chosenGame = wheelGames[chosenIndex];
 

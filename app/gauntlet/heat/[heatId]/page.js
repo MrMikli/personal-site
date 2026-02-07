@@ -31,6 +31,11 @@ export default async function HeatGameSelectionPage({ params }) {
                 }
               }
             }
+          },
+          selectedGame: {
+            include: {
+              platforms: { select: { id: true, name: true, abbreviation: true } }
+            }
           }
         }
       }
@@ -49,6 +54,7 @@ export default async function HeatGameSelectionPage({ params }) {
   const signup = heat.signups?.[0] || null;
   const initialRolls = signup?.rolls || [];
   const initialTargets = signup?.platformTargets || null;
+  const initialSelectedGameId = signup?.selectedGameId || null;
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -71,6 +77,7 @@ export default async function HeatGameSelectionPage({ params }) {
         platforms={heat.platforms}
         initialRolls={initialRolls}
         initialTargets={initialTargets}
+        initialSelectedGameId={initialSelectedGameId}
       />
     </div>
   );

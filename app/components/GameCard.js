@@ -6,9 +6,18 @@ import Link from "next/link";
 export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
   if (!game) return null;
 
-  const year = game.releaseDateHuman
-    ? new Date(game.releaseDateHuman).getFullYear()
-    : null;
+  let year = null;
+  if (game.releaseDateUnix != null) {
+    const unix = Number(game.releaseDateUnix);
+    if (Number.isFinite(unix) && unix > 0) {
+      year = new Date(unix * 1000).getUTCFullYear();
+    }
+  } else if (typeof game.releaseDateHuman === "string") {
+    const match = game.releaseDateHuman.match(/(\d{4})/);
+    if (match) {
+      year = match[1];
+    }
+  }
 
   const backlogSlug = game.slug || "";
   const backlogUrl = backlogSlug
@@ -21,7 +30,7 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
 
   const isWheel = variant === "wheel";
   const cardMaxWidth = isWheel ? 140 : 150;
-  const cardBoxSizing = isWheel ? "border-box" : "content-box";
+  const cardBoxSizing = "border-box";
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -123,7 +132,7 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
           }}
         >
           {game.name}
-          {year ? ` (${year})` : ""}
+          {year != null ? ` (${year})` : ""}
         </div>
         {platformsLabel && (
           <div

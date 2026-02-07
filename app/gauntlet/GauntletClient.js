@@ -9,6 +9,27 @@ function formatDate(d) {
   return dt.toLocaleDateString();
 }
 
+function getGameYear(game) {
+  if (!game) return null;
+  if (game.releaseDateUnix != null) {
+    const unix = Number(game.releaseDateUnix);
+    if (Number.isFinite(unix) && unix > 0) {
+      return new Date(unix * 1000).getUTCFullYear();
+    }
+  }
+  if (typeof game.releaseDateHuman === "string") {
+    const match = game.releaseDateHuman.match(/(\d{4})/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+const STATUS_OPTIONS = [
+  { value: "UNBEATEN", label: "Unbeaten" },
+  { value: "BEATEN", label: "Beaten" },
+  { value: "GIVEN_UP", label: "Given up" }
+];
+
 export default function GauntletClient({ current, upcoming, previous }) {
   const [selectedSection, setSelectedSection] = useState(
     current.length ? "current" : upcoming.length ? "upcoming" : previous.length ? "previous" : "current"
@@ -40,6 +61,33 @@ export default function GauntletClient({ current, upcoming, previous }) {
       setSelectedGauntletId(list[0].id);
     } else {
       setSelectedGauntletId("");
+    }
+  }
+
+  const [statusByHeatId, setStatusByHeatId] = useState({});
+
+  async function handleStatusChange(heatId, nextStatus) {
+    setStatusByHeatId((prev) => ({ ...prev, [heatId]: nextStatus }));
+    try {
+      const res = await fetch(`/api/gauntlet/heats/${heatId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus })
+      });
+      if (!res.ok) {
+        // revert on error
+        setStatusByHeatId((prev) => {
+          const clone = { ...prev };
+          delete clone[heatId];
+          return clone;
+        });
+      }
+    } catch (_e) {
+      setStatusByHeatId((prev) => {
+        const clone = { ...prev };
+        delete clone[heatId];
+        return clone;
+      });
     }
   }
 
@@ -137,27 +185,63 @@ export default function GauntletClient({ current, upcoming, previous }) {
                       <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Start</th>
                       <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>End</th>
                       <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Platforms</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Games</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Your game</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Status</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedGauntlet.heats.map((h) => (
-                      <tr key={h.id}>
-                        <td style={{ padding: 6 }}>{h.name || `Heat ${h.order}`}</td>
-                        <td style={{ padding: 6 }}>{formatDate(h.startsAt)}</td>
-                        <td style={{ padding: 6 }}>{formatDate(h.endsAt)}</td>
-                        <td style={{ padding: 6 }}>
-                          {(h.platforms || []).map((p) => p.name).join(", ")}
-                        </td>
-                        <td style={{ padding: 6 }}>
-                          <Link href={`/gauntlet/heat/${h.id}`}>
-                            <button type="button" style={{ padding: "4px 8px", fontSize: 13 }}>
-                              Go to game selection
-                            </button>
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
+                        {selectedGauntlet.heats.map((h) => {
+                          const user = h.user || {};
+                          const game = user.selectedGame || null;
+                          const year = game ? getGameYear(game) : null;
+                          const currentStatus = statusByHeatId[h.id] || user.status || "UNBEATEN";
+                          const hasPool = !!(user.hasRolls || game);
+                          const buttonLabel = hasPool ? "View roll pool" : "Go to game selection";
+
+                          return (
+                            <tr key={h.id}>
+                              <td style={{ padding: 6 }}>{h.name || `Heat ${h.order}`}</td>
+                              <td style={{ padding: 6 }}>{formatDate(h.startsAt)}</td>
+                              <td style={{ padding: 6 }}>{formatDate(h.endsAt)}</td>
+                              <td style={{ padding: 6 }}>
+                                {(h.platforms || []).map((p) => p.name).join(", ")}
+                              </td>
+                              <td style={{ padding: 6 }}>
+                                {game ? (
+                                  <span>
+                                    {game.name}
+                                    {year ? ` (${year})` : ""}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: "#777", fontStyle: "italic" }}>
+                                    Not chosen yet
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ padding: 6 }}>
+                                <select
+                                  value={currentStatus}
+                                  onChange={(e) => handleStatusChange(h.id, e.target.value)}
+                                  style={{ fontSize: 13 }}
+                                >
+                                  {STATUS_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td style={{ padding: 6 }}>
+                                <Link href={`/gauntlet/heat/${h.id}`}>
+                                  <button type="button" style={{ padding: "4px 8px", fontSize: 13 }}>
+                                    {buttonLabel}
+                                  </button>
+                                </Link>
+                              </td>
+                            </tr>
+                          );
+                        })}
                   </tbody>
                 </table>
               )}

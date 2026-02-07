@@ -20,7 +20,22 @@ export default async function GauntletPage() {
       heats: {
         orderBy: { order: "asc" },
         include: {
-          platforms: { select: { id: true, name: true, abbreviation: true } }
+          platforms: { select: { id: true, name: true, abbreviation: true } },
+          signups: {
+            where: { userId: session.user.id },
+            include: {
+              selectedGame: {
+                include: {
+                  platforms: {
+                    select: { id: true, name: true, abbreviation: true }
+                  }
+                }
+              },
+              rolls: {
+                select: { id: true }
+              }
+            }
+          }
         }
       }
     }
@@ -54,11 +69,57 @@ export default async function GauntletPage() {
   const upcoming = [];
   const previous = [];
 
+  const mapHeat = (h) => {
+    const signup = h.signups && h.signups[0] ? h.signups[0] : null;
+    const selectedGame = signup?.selectedGame
+      ? {
+          id: signup.selectedGame.id,
+          name: signup.selectedGame.name,
+          slug: signup.selectedGame.slug,
+          coverUrl: signup.selectedGame.coverUrl,
+          releaseDateUnix: signup.selectedGame.releaseDateUnix,
+          releaseDateHuman: signup.selectedGame.releaseDateHuman,
+          platforms: (signup.selectedGame.platforms || []).map((p) => ({
+            id: p.id,
+            name: p.name,
+            abbreviation: p.abbreviation || null
+          }))
+        }
+      : null;
+
+    const hasRolls = signup ? (signup.rolls || []).length > 0 : false;
+    const status = signup?.status || "UNBEATEN";
+
+    return {
+      id: h.id,
+      name: h.name,
+      order: h.order,
+      startsAt: h.startsAt,
+      endsAt: h.endsAt,
+      defaultGameCounter: h.defaultGameCounter,
+      platforms: (h.platforms || []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        abbreviation: p.abbreviation || null
+      })),
+      user: {
+        status,
+        hasRolls,
+        selectedGame
+      }
+    };
+  };
+
   for (const g of gauntlets) {
     const bucket = classify(g);
-    if (bucket === "current") current.push(g);
-    else if (bucket === "upcoming") upcoming.push(g);
-    else previous.push(g);
+    const mapped = {
+      id: g.id,
+      name: g.name,
+      heats: (g.heats || []).map(mapHeat)
+    };
+    if (bucket === "current") current.push(mapped);
+    else if (bucket === "upcoming") upcoming.push(mapped);
+    else previous.push(mapped);
   }
 
   return (
