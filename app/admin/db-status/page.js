@@ -10,12 +10,16 @@ export default async function AdminDbStatusPage() {
     redirect('/');
   }
   try {
-    const count = await prisma.user.count();
+    const UserCount = await prisma.user.count();
+    const PlatformCount = await prisma.platform.count();
+    const GameCount = await prisma.game.count();
     return (
       <div>
         <h1>Database Status</h1>
         <p><strong>Status:</strong> Connected</p>
-        <p>Users in DB: {count}</p>
+        <p>Users in DB: {UserCount}</p>
+        <p>Platforms in DB: {PlatformCount}</p>
+        <p>Games in DB: {GameCount}</p>
       </div>
     );
   } catch {

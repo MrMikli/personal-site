@@ -25,7 +25,7 @@ export default function SeedPlatformsClient() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 8 }}>
+    <div>
       <button onClick={handleSeed} disabled={loading}>
         {loading ? "Seeding platforms..." : "Seed all platforms from IGDB"}
       </button>

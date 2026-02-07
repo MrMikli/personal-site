@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/session";
+import { prisma } from "@/lib/prisma";
 import SeedPlatformsClient from "./SeedPlatformsClient";
+import ManagePlatformClient from "./ManagePlatformClient";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +13,11 @@ export default async function AdminDbGameSettingsPage() {
   if (!user?.isAdmin) {
     redirect("/");
   }
+
+  const platforms = await prisma.platform.findMany({
+    select: { id: true, igdbId: true, name: true, abbreviation: true },
+    orderBy: { name: "asc" }
+  });
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -27,9 +34,8 @@ export default async function AdminDbGameSettingsPage() {
 
       <section>
         <h2>Games</h2>
-        <p style={{ marginTop: 0 }}>
-          Admins can populate game lists per platform later. This page will host those tools.
-        </p>
+        <p style={{ marginTop: 0 }}>Select a platform to manage games.</p>
+        <ManagePlatformClient platforms={platforms} />
       </section>
     </div>
   );
