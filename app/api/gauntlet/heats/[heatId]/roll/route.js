@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { ensureHeatIsMutable } from "@/lib/heatGuards";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,11 @@ export async function POST(request, { params }) {
   const heatId = params?.heatId;
   if (!heatId) {
     return NextResponse.json({ message: "Missing heatId" }, { status: 400 });
+  }
+
+  const guard = await ensureHeatIsMutable(heatId);
+  if (!guard.ok) {
+    return NextResponse.json({ message: guard.message }, { status: guard.status });
   }
 
   const body = await request.json().catch(() => ({}));

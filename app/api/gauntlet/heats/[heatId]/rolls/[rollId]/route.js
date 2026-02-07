@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { ensureHeatIsMutable } from "@/lib/heatGuards";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,11 @@ export async function DELETE(_request, { params }) {
 
   if (!heatId || !rollId) {
     return NextResponse.json({ message: "Missing heatId or rollId" }, { status: 400 });
+  }
+
+  const guard = await ensureHeatIsMutable(heatId);
+  if (!guard.ok) {
+    return NextResponse.json({ message: guard.message }, { status: guard.status });
   }
 
   const roll = await prisma.heatRoll.findUnique({

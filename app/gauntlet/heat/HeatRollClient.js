@@ -23,7 +23,9 @@ export default function HeatRollClient({
   platforms,
   initialRolls,
   initialTargets,
-  initialSelectedGameId
+  initialSelectedGameId,
+  isHeatOver = false,
+  isAdmin = false
 }) {
   const [rolls, setRolls] = useState(initialRolls || []);
   const hasInitialTargets = initialTargets && Object.keys(initialTargets).length > 0;
@@ -62,7 +64,7 @@ export default function HeatRollClient({
   const rollsUsedLabel = `${rolls.length} / ${defaultGameCounter} rolled`;
 
   async function handleRoll() {
-    if (isRolling) return;
+    if (isRolling || isHeatOver) return;
     if (rolls.length >= defaultGameCounter) return;
     if (configMismatch) {
       setError(
@@ -114,7 +116,7 @@ export default function HeatRollClient({
   }
 
   function handleTargetChange(platformId, rawValue) {
-    if (isLocked) return;
+    if (isLocked || isHeatOver) return;
     let value = Number(rawValue) || 1;
     if (value < 1) value = 1;
     if (value > maxPerPlatform) value = maxPerPlatform;
@@ -122,6 +124,7 @@ export default function HeatRollClient({
   }
 
   async function handleTechnicalVeto(rollId) {
+    if (isHeatOver) return;
     try {
       const res = await fetch(
         `/api/gauntlet/heats/${heatId}/rolls/${rollId}`,
@@ -150,6 +153,10 @@ export default function HeatRollClient({
   }, [isPoolFull, finalSelectedGameId, selectedRollId, rolls]);
 
   async function handleChooseGame() {
+    if (isHeatOver) {
+      setError("This heat is over; you can no longer choose a game.");
+      return;
+    }
     if (!isPoolFull) {
       setError("You must roll the full pool before choosing a game.");
       return;
@@ -181,63 +188,158 @@ export default function HeatRollClient({
     }
   }
 
+  async function handleUndoPick() {
+    if (isHeatOver) {
+      setError("This heat is over; you can no longer change your chosen game.");
+      return;
+    }
+    const confirmed = window.confirm(
+      "Are you sure you want to undo your picked game for this heat? This should only be used for a genuine technical veto when the game is not actually available to you, not just because you are a little baby a little wussy pussy wahh wahh coward."
+    );
+    if (!confirmed) return;
+    try {
+      setError("");
+      const res = await fetch(`/api/gauntlet/heats/${heatId}/selected-game`, {
+        method: "DELETE"
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || "Failed to undo picked game for this heat");
+      }
+      setFinalSelectedGameId(null);
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  }
+
+  async function handleAdminReset() {
+    if (!isAdmin || isHeatOver) return;
+    const confirmed = window.confirm(
+      "Reset all your rolls, configuration, and picked game for this heat? This is an admin-only tool and should normally only be used for testing or fixing a broken signup."
+    );
+    if (!confirmed) return;
+    try {
+      setError("");
+      const res = await fetch(`/api/gauntlet/heats/${heatId}/reset-signup`, {
+        method: "POST"
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || "Failed to reset your rolls for this heat");
+      }
+      setRolls([]);
+      setPlatformTargets(buildInitialTargets(platforms || [], defaultGameCounter));
+      setIsLocked(false);
+      setFinalSelectedGameId(null);
+      setSelectedRollId(null);
+      setWheel(null);
+      setPendingRoll(null);
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  }
+
   return (
     <>
       <div
-        aria-label="Roll configuration"
         style={{
           marginTop: 8,
-          padding: 12,
-          borderRadius: 8,
-          border: "1px solid #e0e0e0",
-          background: "#fafafa",
-          display: "grid",
-          gap: 8,
-          width: "fit-content",
+          display: "flex",
+          gap: 16,
+          alignItems: "flex-start",
+          flexWrap: "wrap"
         }}
       >
-        <div style={{ fontSize: 13, color: "#444" }}>
-            <><div style={{ color: "#ff0000" }}>Caution:</div><div>Once you roll, your platform configuration for this heat is locked.</div> <br /><div>Choose how many rolls to aim for on each platform (min 1 each).</div></>
-        </div>
         <div
+          aria-label="Roll configuration"
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12
+            padding: 12,
+            borderRadius: 8,
+            border: "1px solid #e0e0e0",
+            background: "#fafafa",
+            display: "grid",
+            gap: 8,
+            width: "fit-content"
           }}
         >
-          {(platforms || []).map((p) => (
-            <label
-              key={p.id}
-              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 , color: "#333"  }}
-            >
-              <span>
-                {p.name}
-                {p.abbreviation ? ` (${p.abbreviation})` : ""}
-              </span>
-              {isLocked ? (
-                <span>{platformTargets[p.id] ?? 0}</span>
-              ) : (
-                <input
-                  type="number"
-                  min={1}
-                  max={maxPerPlatform}
-                  value={platformTargets[p.id] ?? ""}
-                  onChange={(e) => handleTargetChange(p.id, e.target.value)}
-                  style={{ width: 60 }}
-                />
+          <div style={{ fontSize: 13, color: "#444" }}>
+              <><div style={{ color: "#ff0000" }}>Caution:</div><div>Once you roll, your platform configuration for this heat is locked.</div> <br /><div>Choose how many rolls to aim for on each platform (min 1 each).</div></>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12
+            }}
+          >
+            {(platforms || []).map((p) => (
+              <label
+                key={p.id}
+                style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 , color: "#333"  }}
+              >
+                <span>
+                  {p.name}
+                  {p.abbreviation ? ` (${p.abbreviation})` : ""}
+                </span>
+                {isLocked ? (
+                  <span>{platformTargets[p.id] ?? 0}</span>
+                ) : (
+                  <input
+                    type="number"
+                    min={1}
+                    max={maxPerPlatform}
+                    value={platformTargets[p.id] ?? ""}
+                    onChange={(e) => handleTargetChange(p.id, e.target.value)}
+                    style={{ width: 60 }}
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+          {!isLocked && (
+            <div style={{ fontSize: 12, color: "#666" }}>
+              Configured total: {totalConfigured} out of {defaultGameCounter}
+              {configMismatch && (
+                <div style={{ color: "crimson", marginTop: 4 }}>
+                  Total must equal {defaultGameCounter} before you can roll.
+                </div>
               )}
-            </label>
-          ))}
+            </div>
+          )}
         </div>
-        {!isLocked && (
-          <div style={{ fontSize: 12, color: "#666" }}>
-            Configured total: {totalConfigured} out of {defaultGameCounter}
-            {configMismatch && (
-              <div style={{ color: "crimson", marginTop: 4 }}>
-                Total must equal {defaultGameCounter} before you can roll.
-              </div>
-            )}
+
+        {isAdmin && !isHeatOver && (
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 8,
+              border: "1px dashed #b91c1c",
+              background: "#fff7f7",
+              maxWidth: 260,
+              display: "grid",
+              gap: 8,
+              fontSize: 13
+            }}
+          >
+            <div style={{ fontWeight: 600, color: "#b91c1c" }}>Admin only</div>
+            <div style={{ color: "#7f1d1d" }}>
+              Reset your rolls, configuration, and picked game for this heat.
+            </div>
+            <button
+              type="button"
+              onClick={handleAdminReset}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 999,
+                border: "1px solid #b91c1c",
+                background: "white",
+                color: "#b91c1c",
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              Reset my rolls
+            </button>
           </div>
         )}
       </div>
@@ -265,7 +367,9 @@ export default function HeatRollClient({
       >
         <div style={{ textAlign: "center", maxWidth: 480 }}>
           <p style={{ color: "#666", marginBottom: 12 }}>
-            Press roll to draw a game.
+            {isHeatOver
+              ? "This heat is over. You can review your pool, but cannot roll again."
+              : "Press roll to draw a game."}
           </p>
         </div>
 
@@ -280,6 +384,7 @@ export default function HeatRollClient({
         <button
           onClick={handleRoll}
           disabled={
+            isHeatOver ||
             isRolling ||
             rolls.length >= defaultGameCounter ||
             configMismatch
@@ -288,14 +393,21 @@ export default function HeatRollClient({
             padding: "8px 20px",
             borderRadius: 999,
             border: "none",
-            background: isRolling || rolls.length >= defaultGameCounter || configMismatch ? "#ccc" : "#222",
+            background:
+              isHeatOver || isRolling || rolls.length >= defaultGameCounter || configMismatch
+                ? "#ccc"
+                : "#222",
             color: "white",
             cursor:
-              isRolling || rolls.length >= defaultGameCounter || configMismatch ? "default" : "pointer",
+              isHeatOver || isRolling || rolls.length >= defaultGameCounter || configMismatch
+                ? "default"
+                : "pointer",
             fontWeight: 600
           }}
         >
-          {rolls.length >= defaultGameCounter || configMismatch
+          {isHeatOver
+            ? "Heat over"
+            : rolls.length >= defaultGameCounter || configMismatch
             ? "Can't roll"
             : isRolling
             ? "Rolling..."
@@ -368,14 +480,36 @@ export default function HeatRollClient({
         >
           <h3 style={{ margin: 0 , color: "#166534" }}>Final choice for this heat</h3>
           {finalSelectedGameId ? (
-            <p style={{ margin: 0, color: "#166534" }}>
-              You have chosen your game for this heat.
-            </p>
+            <>
+              <p style={{ margin: 0, color: "#166534" }}>
+                You have chosen your game for this heat.
+              </p>
+              {!isHeatOver && (
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    onClick={handleUndoPick}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      border: "1px solid #b91c1c",
+                      background: "#fff7f7",
+                      color: "#b91c1c",
+                      fontSize: 13,
+                      cursor: "pointer"
+                    }}
+                  >
+                    Undo pick (technical veto)
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <>
               <p style={{ margin: 0, color: "#444" }}>
-                Select one of your rolled games to be your official pick for
-                this heat.
+                {isHeatOver
+                  ? "This heat is over. You cannot change your chosen game anymore."
+                  : "Select one of your rolled games to be your official pick for this heat."}
               </p>
               <div
                 style={{
@@ -388,6 +522,7 @@ export default function HeatRollClient({
                 <select
                   value={selectedRollId || ""}
                   onChange={(e) => setSelectedRollId(e.target.value || null)}
+                  disabled={isHeatOver}
                   style={{ minWidth: 260, padding: 4 }}
                 >
                   <option value="" disabled>
@@ -420,11 +555,12 @@ export default function HeatRollClient({
                     padding: "6px 16px",
                     borderRadius: 999,
                     border: "none",
-                    background: "#166534",
+                    background: isHeatOver ? "#ccc" : "#166534",
                     color: "white",
                     fontWeight: 600,
-                    cursor: "pointer"
+                    cursor: isHeatOver ? "default" : "pointer"
                   }}
+                  disabled={isHeatOver}
                 >
                   Choose
                 </button>

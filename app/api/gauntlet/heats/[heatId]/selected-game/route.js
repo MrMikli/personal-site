@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { ensureHeatIsMutable } from "@/lib/heatGuards";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,11 @@ export async function POST(request, { params }) {
     }
 
     const { heatId } = params;
+
+    const guard = await ensureHeatIsMutable(heatId);
+    if (!guard.ok) {
+      return NextResponse.json({ message: guard.message }, { status: guard.status });
+    }
     const body = await request.json().catch(() => ({}));
     const { rollId } = body || {};
 
@@ -72,6 +78,50 @@ export async function POST(request, { params }) {
     });
   } catch (error) {
     console.error("Error choosing selected game for heat", error);
+    return NextResponse.json(
+      { message: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(_request, { params }) {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const { heatId } = params;
+
+    const guard = await ensureHeatIsMutable(heatId);
+    if (!guard.ok) {
+      return NextResponse.json({ message: guard.message }, { status: guard.status });
+    }
+
+    const userId = session.user.id;
+
+    const signup = await prisma.heatSignup.findUnique({
+      where: {
+        heatId_userId: { heatId, userId }
+      }
+    });
+
+    if (!signup || !signup.selectedGameId) {
+      return NextResponse.json(
+        { message: "No picked game to undo for this heat" },
+        { status: 400 }
+      );
+    }
+
+    await prisma.heatSignup.update({
+      where: { id: signup.id },
+      data: { selectedGameId: null }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error undoing selected game for heat", error);
     return NextResponse.json(
       { message: "Internal server error" },
       { status: 500 }

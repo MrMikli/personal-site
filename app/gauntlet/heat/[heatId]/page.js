@@ -56,6 +56,17 @@ export default async function HeatGameSelectionPage({ params }) {
   const initialTargets = signup?.platformTargets || null;
   const initialSelectedGameId = signup?.selectedGameId || null;
 
+  const now = new Date();
+  const endsAt = heat.endsAt ? new Date(heat.endsAt) : null;
+  let isHeatOver = false;
+  if (endsAt && !Number.isNaN(endsAt.getTime())) {
+    const endOfDay = new Date(endsAt);
+    endOfDay.setHours(23, 59, 59, 999);
+    if (now.getTime() > endOfDay.getTime()) {
+      isHeatOver = true;
+    }
+  }
+
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <div>
@@ -78,6 +89,8 @@ export default async function HeatGameSelectionPage({ params }) {
         initialRolls={initialRolls}
         initialTargets={initialTargets}
         initialSelectedGameId={initialSelectedGameId}
+        isHeatOver={isHeatOver}
+        isAdmin={!!session.user.isAdmin}
       />
     </div>
   );

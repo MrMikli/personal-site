@@ -5,12 +5,14 @@ import { ensureHeatIsMutable } from "@/lib/heatGuards";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_STATUSES = ["UNBEATEN", "BEATEN", "GIVEN_UP"];
-
-export async function POST(request, { params }) {
+export async function POST(_request, { params }) {
   const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!session.user.isAdmin) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
   const heatId = params?.heatId;
@@ -23,35 +25,30 @@ export async function POST(request, { params }) {
     return NextResponse.json({ message: guard.message }, { status: guard.status });
   }
 
-  const body = await request.json().catch(() => ({}));
-  const { status } = body || {};
-
-  if (!ALLOWED_STATUSES.includes(status)) {
-    return NextResponse.json({ message: "Invalid status" }, { status: 400 });
-  }
-
   const userId = session.user.id;
 
-  let signup = await prisma.heatSignup.findUnique({
+  const signup = await prisma.heatSignup.findUnique({
     where: {
       heatId_userId: { heatId, userId }
     }
   });
 
   if (!signup) {
-    signup = await prisma.heatSignup.create({
-      data: {
-        heatId,
-        userId,
-        status
-      }
-    });
-  } else if (signup.status !== status) {
-    signup = await prisma.heatSignup.update({
-      where: { id: signup.id },
-      data: { status }
-    });
+    // Nothing to reset
+    return NextResponse.json({ success: true });
   }
 
-  return NextResponse.json({ success: true, status: signup.status });
+  await prisma.$transaction([
+    prisma.heatRoll.deleteMany({ where: { heatSignupId: signup.id } }),
+    prisma.heatSignup.update({
+      where: { id: signup.id },
+      data: {
+        selectedGameId: null,
+        platformTargets: null,
+        status: "UNBEATEN"
+      }
+    })
+  ]);
+
+  return NextResponse.json({ success: true });
 }

@@ -199,6 +199,17 @@ export default function GauntletClient({ current, upcoming, previous }) {
                           const hasPool = !!(user.hasRolls || game);
                           const buttonLabel = hasPool ? "View roll pool" : "Go to game selection";
 
+                          const now = new Date();
+                          const endsAt = h.endsAt ? new Date(h.endsAt) : null;
+                          let isHeatOver = false;
+                          if (endsAt && !Number.isNaN(endsAt.getTime())) {
+                            const endOfDay = new Date(endsAt);
+                            endOfDay.setHours(23, 59, 59, 999);
+                            if (now.getTime() > endOfDay.getTime()) {
+                              isHeatOver = true;
+                            }
+                          }
+
                           return (
                             <tr key={h.id}>
                               <td style={{ padding: 6 }}>{h.name || `Heat ${h.order}`}</td>
@@ -223,6 +234,7 @@ export default function GauntletClient({ current, upcoming, previous }) {
                                 <select
                                   value={currentStatus}
                                   onChange={(e) => handleStatusChange(h.id, e.target.value)}
+                                  disabled={isHeatOver}
                                   style={{ fontSize: 13 }}
                                 >
                                   {STATUS_OPTIONS.map((opt) => (
@@ -234,7 +246,14 @@ export default function GauntletClient({ current, upcoming, previous }) {
                               </td>
                               <td style={{ padding: 6 }}>
                                 <Link href={`/gauntlet/heat/${h.id}`}>
-                                  <button type="button" style={{ padding: "4px 8px", fontSize: 13 }}>
+                                  <button
+                                    type="button"
+                                    style={{
+                                      padding: "4px 8px",
+                                      fontSize: 13,
+                                      opacity: isHeatOver ? 0.7 : 1
+                                    }}
+                                  >
                                     {buttonLabel}
                                   </button>
                                 </Link>
