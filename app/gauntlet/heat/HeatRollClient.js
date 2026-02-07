@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import GameCard from "@/app/components/GameCard";
+import RollingWheel from "./RollingWheel";
 
 function buildInitialTargets(platforms, defaultGameCounter) {
   if (!platforms.length || defaultGameCounter <= 0) return {};
@@ -48,7 +49,10 @@ export default function HeatRollClient({
   const platformCount = platforms?.length || 0;
   const maxPerPlatform = Math.max(1, defaultGameCounter - Math.max(platformCount - 1, 0));
 
-   const configMismatch = !isLocked && totalConfigured !== defaultGameCounter;
+  const configMismatch = !isLocked && totalConfigured !== defaultGameCounter;
+
+  const [wheel, setWheel] = useState(null);
+  const [pendingRoll, setPendingRoll] = useState(null);
 
   const rollsUsedLabel = `${rolls.length} / ${defaultGameCounter} rolled`;
 
@@ -63,6 +67,7 @@ export default function HeatRollClient({
     }
     setIsRolling(true);
     setError("");
+    let hasWheel = false;
     try {
       const res = await fetch(`/api/gauntlet/heats/${heatId}/roll`, {
         method: "POST",
@@ -77,15 +82,30 @@ export default function HeatRollClient({
         setPlatformTargets(json.targets);
         setIsLocked(true);
       }
-      if (json?.roll) {
+      if (json?.wheel && json?.roll) {
+        hasWheel = true;
+        setWheel(json.wheel);
+        setPendingRoll(json.roll);
+      } else if (json?.roll) {
+        // Fallback if wheel data is missing
         setRolls((prev) => [...prev, json.roll]);
       }
-      // wheel info (json.wheel) can be used later for animations
     } catch (e) {
       setError(String(e.message || e));
     } finally {
-      setIsRolling(false);
+      // If no wheel animation is running, clear rolling state immediately
+      if (!hasWheel) {
+        setIsRolling(false);
+      }
     }
+  }
+
+  function handleWheelComplete() {
+    if (pendingRoll) {
+      setRolls((prev) => [...prev, pendingRoll]);
+      setPendingRoll(null);
+    }
+    setIsRolling(false);
   }
 
   function handleTargetChange(platformId, rawValue) {
@@ -94,6 +114,24 @@ export default function HeatRollClient({
     if (value < 1) value = 1;
     if (value > maxPerPlatform) value = maxPerPlatform;
     setPlatformTargets((prev) => ({ ...prev, [platformId]: value }));
+  }
+
+  async function handleTechnicalVeto(rollId) {
+    try {
+      const res = await fetch(
+        `/api/gauntlet/heats/${heatId}/rolls/${rollId}`,
+        {
+          method: "DELETE"
+        }
+      );
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.message || "Failed to apply technical veto");
+      }
+      setRolls((prev) => prev.filter((r) => r.id !== rollId));
+    } catch (e) {
+      setError(String(e.message || e));
+    }
   }
 
   return (
@@ -184,7 +222,14 @@ export default function HeatRollClient({
             Press roll to draw a game. A wheel-style animation will go here later.
           </p>
         </div>
-        
+
+        {wheel && (
+          <RollingWheel
+            games={wheel.games}
+            chosenIndex={wheel.chosenIndex}
+            onComplete={handleWheelComplete}
+          />
+        )}
 
         <button
           onClick={handleRoll}
@@ -232,13 +277,20 @@ export default function HeatRollClient({
         ) : (
           <div
             style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 16
+              display: "grid",
+              gridTemplateColumns: "repeat(10, minmax(0, 1fr))",
+              gap: 12,
+              alignItems: "stretch",
+              justifyItems: "center"
             }}
           >
             {rolls.map((roll) => (
-              <GameCard key={roll.id} game={roll.game} />
+              <GameCard
+                key={roll.id}
+                game={roll.game}
+                variant="pool"
+                onTechnicalVeto={() => handleTechnicalVeto(roll.id)}
+              />
             ))}
           </div>
         )}

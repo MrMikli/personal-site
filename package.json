@@ -13,6 +13,7 @@
   "dependencies": {
     "@prisma/client": "^5.10.0",
     "bcryptjs": "^2.4.3",
+    "framer-motion": "^12.33.0",
     "iron-session": "^8.0.1",
     "next": "^14.2.0",
     "react": "^18.2.0",
