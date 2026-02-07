@@ -1,12 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-
-function fmtDateInput(dt) {
-  if (!dt) return "";
-  const d = new Date(dt);
-  const iso = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString();
-  return iso.slice(0, 16); // yyyy-MM-ddTHH:mm
-}
+import { useEffect, useState } from "react";
 
 export default function GauntletManagerClient() {
   const [gauntlets, setGauntlets] = useState([]);
@@ -17,11 +10,8 @@ export default function GauntletManagerClient() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Create gauntlet form
   const [gName, setGName] = useState("");
-  // Gauntlet no longer has slug/description/dates
 
-  // Create heat form
   const [hName, setHName] = useState("");
   const [hOrder, setHOrder] = useState(1);
   const [hStartsAt, setHStartsAt] = useState("");
@@ -51,12 +41,9 @@ export default function GauntletManagerClient() {
     setHeats(json.heats || []);
   }
 
-  useEffect(() => { loadGauntlets(); loadPlatforms(); }, []);
-  useEffect(() => { if (selectedId) loadHeats(selectedId); }, [selectedId]);
-
   async function loadPlatforms() {
     setError("");
-    const res = await fetch("/api/admin/platforms");
+    const res = await fetch("/api/admin/platforms?hasGames=true");
     const json = await res.json();
     if (!res.ok) {
       setError(json?.message || "Failed to load platforms");
@@ -65,6 +52,15 @@ export default function GauntletManagerClient() {
     setPlatforms(json.platforms || []);
   }
 
+  useEffect(() => {
+    loadGauntlets();
+    loadPlatforms();
+  }, []);
+
+  useEffect(() => {
+    if (selectedId) loadHeats(selectedId);
+  }, [selectedId]);
+
   async function createGauntlet() {
     setLoading(true);
     setError("");
@@ -72,9 +68,7 @@ export default function GauntletManagerClient() {
       const res = await fetch("/api/admin/gauntlets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: gName.trim()
-        })
+        body: JSON.stringify({ name: gName.trim() })
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Failed to create gauntlet");
@@ -106,7 +100,12 @@ export default function GauntletManagerClient() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Failed to create heat");
-      setHName(""); setHOrder(1); setHStartsAt(""); setHEndsAt(""); setHDefaultCount(1); setSelectedPlatformIds([]);
+      setHName("");
+      setHOrder(1);
+      setHStartsAt("");
+      setHEndsAt("");
+      setHDefaultCount(1);
+      setSelectedPlatformIds([]);
       await loadHeats(selectedId);
     } catch (e) {
       setError(String(e.message || e));
@@ -140,9 +139,11 @@ export default function GauntletManagerClient() {
         <div style={{ display: "grid", gap: 8, maxWidth: 600 }}>
           <label style={{ display: "grid", gap: 4 }}>
             <span>Name</span>
-            <input value={gName} onChange={e => setGName(e.target.value)} />
+            <input value={gName} onChange={(e) => setGName(e.target.value)} />
           </label>
-          <button onClick={createGauntlet} disabled={loading || !gName.trim()}>Create Gauntlet</button>
+          <button onClick={createGauntlet} disabled={loading || !gName.trim()}>
+            Create Gauntlet
+          </button>
         </div>
       </section>
 
@@ -150,10 +151,12 @@ export default function GauntletManagerClient() {
         <h2>Manage Heats</h2>
         <label style={{ display: "grid", gap: 4, maxWidth: 400 }}>
           <span>Select Gauntlet</span>
-          <select value={selectedId} onChange={e => setSelectedId(e.target.value)}>
+          <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
             <option value="">-- Choose --</option>
-            {gauntlets.map(g => (
-              <option key={g.id} value={g.id}>{g.name}</option>
+            {gauntlets.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
             ))}
           </select>
         </label>
@@ -168,26 +171,24 @@ export default function GauntletManagerClient() {
                 <table style={{ borderCollapse: "collapse", width: "100%" }}>
                   <thead>
                     <tr>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 8 }}>Order</th>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 8 }}>Name</th>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 8 }}>Start Date</th>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 8 }}>End Date</th>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 8 }}>Default Count</th>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 8 }}>Platforms</th>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 8 }}>Actions</th>
+                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Order</th>
+                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Name</th>
+                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Start Date</th>
+                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>End Date</th>
+                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Default Count</th>
+                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Platforms</th>
+                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {heats.map(h => (
+                    {heats.map((h) => (
                       <tr key={h.id}>
                         <td style={{ padding: 8 }}>{h.order}</td>
-                        <td style={{ padding: 8 }}>{h.name || ''}</td>
-                        <td style={{ padding: 8 }}>{h.startsAt ? new Date(h.startsAt).toLocaleDateString() : ''}</td>
-                        <td style={{ padding: 8 }}>{h.endsAt ? new Date(h.endsAt).toLocaleDateString() : ''}</td>
+                        <td style={{ padding: 8 }}>{h.name || ""}</td>
+                        <td style={{ padding: 8 }}>{h.startsAt ? new Date(h.startsAt).toLocaleDateString() : ""}</td>
+                        <td style={{ padding: 8 }}>{h.endsAt ? new Date(h.endsAt).toLocaleDateString() : ""}</td>
                         <td style={{ padding: 8 }}>{h.defaultGameCounter}</td>
-                        <td style={{ padding: 8 }}>
-                          {(h.platforms || []).map(p => p.name).join(', ')}
-                        </td>
+                        <td style={{ padding: 8 }}>{(h.platforms || []).map((p) => p.name).join(", ")}</td>
                         <td style={{ padding: 8 }}>
                           <button onClick={() => deleteHeat(h.id)}>Delete</button>
                         </td>
@@ -203,49 +204,53 @@ export default function GauntletManagerClient() {
               <div style={{ display: "grid", gap: 8, maxWidth: 600 }}>
                 <label style={{ display: "grid", gap: 4 }}>
                   <span>Name (optional)</span>
-                  <input value={hName} onChange={e => setHName(e.target.value)} />
+                  <input value={hName} onChange={(e) => setHName(e.target.value)} />
                 </label>
                 <label style={{ display: "grid", gap: 4 }}>
                   <span>Order</span>
-                  <input type="number" value={hOrder} onChange={e => setHOrder(e.target.value)} />
+                  <input type="number" value={hOrder} onChange={(e) => setHOrder(e.target.value)} />
                 </label>
                 <label style={{ display: "grid", gap: 4 }}>
                   <span>Default Game Counter</span>
-                  <input type="number" min={1} value={hDefaultCount} onChange={e => setHDefaultCount(e.target.value)} />
+                  <input type="number" min={1} value={hDefaultCount} onChange={(e) => setHDefaultCount(e.target.value)} />
                 </label>
                 <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}>
                   <label style={{ display: "grid", gap: 4 }}>
                     <span>Start Date</span>
-                    <input type="date" value={hStartsAt} onChange={e => setHStartsAt(e.target.value)} />
+                    <input type="date" value={hStartsAt} onChange={(e) => setHStartsAt(e.target.value)} />
                   </label>
                   <label style={{ display: "grid", gap: 4 }}>
                     <span>End Date</span>
-                    <input type="date" value={hEndsAt} onChange={e => setHEndsAt(e.target.value)} />
+                    <input type="date" value={hEndsAt} onChange={(e) => setHEndsAt(e.target.value)} />
                   </label>
                 </div>
-                {/* Selected game is per-user and will be set later */}
                 <div style={{ display: "grid", gap: 8 }}>
                   <span>Platforms</span>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    {platforms.map(p => (
-                      <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {platforms.map((p) => (
+                      <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <input
                           type="checkbox"
                           checked={selectedPlatformIds.includes(p.id)}
-                          onChange={e => {
+                          onChange={(e) => {
                             const checked = e.target.checked;
-                            setSelectedPlatformIds(prev => {
+                            setSelectedPlatformIds((prev) => {
                               if (checked) return [...prev, p.id];
-                              return prev.filter(id => id !== p.id);
+                              return prev.filter((id) => id !== p.id);
                             });
                           }}
                         />
-                        <span>{p.name}{p.abbreviation ? ` (${p.abbreviation})` : ''}</span>
+                        <span>
+                          {p.name}
+                          {p.abbreviation ? ` (${p.abbreviation})` : ""}
+                        </span>
                       </label>
                     ))}
                   </div>
                 </div>
-                <button onClick={createHeat} disabled={loading || !hStartsAt || !hEndsAt}>Add Heat</button>
+                <button onClick={createHeat} disabled={loading || !hStartsAt || !hEndsAt}>
+                  Add Heat
+                </button>
               </div>
             </div>
           </div>

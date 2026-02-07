@@ -4,7 +4,7 @@ import GauntletManagerClient from "./GauntletManagerClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminGauntletsPage() {
+export default async function AdminGauntletManagementPage() {
   const session = await getSession();
   if (!session?.user?.isAdmin) redirect("/");
 

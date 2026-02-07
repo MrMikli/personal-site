@@ -7,7 +7,7 @@ import ManagePlatformClient from "./ManagePlatformClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminDbGameSettingsPage() {
+export default async function AdminGameManagementPage() {
   const session = await getSession();
   const user = session.user;
   if (!user?.isAdmin) {
@@ -21,7 +21,7 @@ export default async function AdminDbGameSettingsPage() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <h1>DB Game Settings</h1>
+      <h1>Game Management</h1>
       <div>
         <Link href="/admin">← Back to Admin</Link>
       </div>

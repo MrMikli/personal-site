@@ -11,7 +11,9 @@ export default async function GauntletPage() {
   return (
     <div>
       <h1>Retro Game Gauntlet</h1>
-      <p>This page is accessible only to logged-in users. Content coming soon.</p>
+      <p>Welcome, {session.user.username}</p>
+      <h2>Current Gauntlet:</h2>
+      <p>None yet!</p>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { getSession } from '../../../lib/session';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminDbStatusPage() {
+export default async function AdminStatusPage() {
   const session = await getSession();
   if (!session.user?.isAdmin) {
     redirect('/');
