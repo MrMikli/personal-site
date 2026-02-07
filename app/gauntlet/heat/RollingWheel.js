@@ -52,18 +52,19 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
             left: "50%",
             transform: "translateX(-50%)",
             borderLeft: "2px solid rgba(0,0,0,0.35)",
-            pointerEvents: "none"
+            pointerEvents: "none",
+            zIndex: 5
           }}
         />
       )}
 
       <motion.div
-        style={{ display: "flex" }}
+        style={{ display: "flex", position: "relative", zIndex: 1 }}
         initial={{ x: 0 }}
         animate={{ x: endX }}
         transition={{
-          duration: 4,
-          ease: [0.16, 1, 0.3, 1]
+          duration: 8,
+          ease: [0.05, 0.9, 0.25, 1]
         }}
         onAnimationComplete={handleAnimationComplete}
       >
@@ -86,15 +87,14 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
             >
               <div
                 style={{
-                  boxSizing: "border-box",
-                  width: "100%",
+                  display: "inline-block",
                   ...(isSelected
                     ? {
-                        borderRadius: 12,
-                        padding: 1,
+                        borderRadius: 10,
+                        padding: 3,
                         boxShadow: "0 0 18px rgba(255, 215, 0, 0.85)",
-                        border: "1px solid #facc15",
-                        background: "rgba(0,0,0,0.85)"
+                        border: "2px solid #facc15",
+                        background: "rgba(0,0,0,0.4)"
                       }
                     : {})
                 }}

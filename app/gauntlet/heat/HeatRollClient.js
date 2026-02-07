@@ -217,9 +217,8 @@ export default function HeatRollClient({
         }}
       >
         <div style={{ textAlign: "center", maxWidth: 480 }}>
-          <h3 style={{ marginBottom: 8, fontSize: 22 }}>Rolling</h3>
           <p style={{ color: "#666", marginBottom: 12 }}>
-            Press roll to draw a game. A wheel-style animation will go here later.
+            Press roll to draw a game.
           </p>
         </div>
 
@@ -253,7 +252,7 @@ export default function HeatRollClient({
             ? "Can't roll"
             : isRolling
             ? "Rolling..."
-            : "Roll"}
+            : "Let's go gambling!"}
         </button>
       </section>
 
