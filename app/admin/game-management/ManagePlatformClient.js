@@ -218,7 +218,7 @@ export default function ManagePlatformClient({ platforms }) {
             <div style={{ fontSize: 14, color: '#444' }}>
               This will remove all existing games and associations for {formatName(selected)} on this site, then import afresh from IGDB.
             </div>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#d32f2f' }}>
               <input type="checkbox" checked={ackClear} onChange={(e) => setAckClear(e.target.checked)} />
               <span>I understand this action is destructive and cannot be undone.</span>
             </label>

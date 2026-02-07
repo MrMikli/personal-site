@@ -1,20 +1,12 @@
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { igdbRequest } from '@/lib/igdb';
-
-function pickEarliestRelease(release_dates) {
-  if (!Array.isArray(release_dates) || release_dates.length === 0) return null;
-  const sorted = [...release_dates].sort((a, b) => (a.date ?? 0) - (b.date ?? 0));
-  const first = sorted[0];
-  return { unix: first?.date ?? null, human: first?.human ?? null };
-}
-
-function toCoverBigUrl(cover) {
-  const raw = cover?.url;
-  if (!raw) return null;
-  const withScheme = raw.startsWith('//') ? `https:${raw}` : raw;
-  return withScheme.replace(/\/t_[^/]+\//, '/t_cover_big/');
-}
+import {
+  buildGameCountBody,
+  buildGameQuery,
+  pickEarliestRelease,
+  toCoverBigUrl,
+} from '@/lib/igdbGames';
 
 export async function GET(req, { params }) {
   const session = await getSession();
@@ -40,7 +32,7 @@ export async function GET(req, { params }) {
 
       try {
         // Compute total count first for UI progress (best-effort)
-        const countWhere = `where platforms = ${platformIgdbId} & (game_status = null | game_status = 0) & version_parent = null & ((game_type = null | game_type = 0) | (category = null | category = 0));`;
+        const countWhere = buildGameCountBody(platformIgdbId);
         let totalCount = 0;
         try {
           const countRes = await igdbRequest('games/count', countWhere);
@@ -87,7 +79,7 @@ export async function GET(req, { params }) {
 
         while (true) {
           page += 1;
-          const body = `fields id, name, slug, release_dates.date, release_dates.human, cover.url, platforms.id;\nwhere platforms = ${platformIgdbId} & (game_status = null | game_status = 0) & version_parent = null & ((game_type = null | game_type = 0) | (category = null | category = 0));\nsort id asc;\nlimit ${pageSize};\noffset ${offset};`;
+          const body = buildGameQuery({ platformIgdbId, limit: pageSize, offset });
           const games = await igdbRequest('games', body);
           if (!Array.isArray(games) || games.length === 0) break;
 
