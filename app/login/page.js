@@ -22,7 +22,7 @@ export default function LoginPage() {
       });
       if (res.ok) {
         // Navigate, then refresh to ensure server components re-read cookies
-        router.push('/protected');
+        router.push('/');
         router.refresh();
       } else {
         const data = await res.json().catch(() => ({ message: 'Login failed' }));

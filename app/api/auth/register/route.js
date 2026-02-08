@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
 
 const RegisterSchema = z.object({
   username: z.string().min(3).max(32),
@@ -19,7 +22,14 @@ export async function POST(request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    await prisma.user.create({ data: { username, passwordHash } });
+    const user = await prisma.user.create({
+      data: { username, passwordHash },
+      select: { id: true, username: true, isAdmin: true }
+    });
+
+    const session = await getIronSession(cookies(), sessionOptions);
+    session.user = { id: user.id, username: user.username, isAdmin: user.isAdmin };
+    await session.save();
 
     return NextResponse.json({ ok: true });
   } catch (err) {

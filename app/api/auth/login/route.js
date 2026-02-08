@@ -4,17 +4,12 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
 
 const LoginSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1)
 });
-
-const sessionOptions = {
-  password: process.env.IRON_SESSION_PASSWORD,
-  cookieName: 'miklis_session',
-  cookieOptions: { secure: process.env.NODE_ENV === 'production' }
-};
 
 export async function POST(request) {
   const body = await request.json().catch(() => ({}));
