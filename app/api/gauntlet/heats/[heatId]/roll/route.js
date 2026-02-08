@@ -105,39 +105,40 @@ function shuffleInPlace(array) {
 }
 
 export async function POST(request, { params }) {
-  const session = await getSession();
-  if (!session?.user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-
-  const heatId = params?.heatId;
-  if (!heatId) {
-    return NextResponse.json({ message: "Missing heatId" }, { status: 400 });
-  }
-
-  const guard = await ensureHeatIsMutable(heatId, { userId: session.user.id });
-  if (!guard.ok) {
-    return NextResponse.json({ message: guard.message }, { status: guard.status });
-  }
-
-  const body = await request.json().catch(() => ({}));
-  const rawTargets = body.platformTargets || {};
-  const rawWesternRequired = body.westernRequired;
-
-  const heat = await prisma.heat.findUnique({
-    where: { id: heatId },
-    include: {
-      platforms: { select: { id: true, name: true, abbreviation: true } }
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
-  });
 
-  if (!heat) {
-    return NextResponse.json({ message: "Heat not found" }, { status: 404 });
-  }
+    const heatId = params?.heatId;
+    if (!heatId) {
+      return NextResponse.json({ message: "Missing heatId" }, { status: 400 });
+    }
 
-  if (!heat.platforms.length) {
-    return NextResponse.json({ message: "No platforms configured for this heat" }, { status: 400 });
-  }
+    const guard = await ensureHeatIsMutable(heatId, { userId: session.user.id });
+    if (!guard.ok) {
+      return NextResponse.json({ message: guard.message }, { status: guard.status });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const rawTargets = body.platformTargets || {};
+    const rawWesternRequired = body.westernRequired;
+
+    const heat = await prisma.heat.findUnique({
+      where: { id: heatId },
+      include: {
+        platforms: { select: { id: true, name: true, abbreviation: true } }
+      }
+    });
+
+    if (!heat) {
+      return NextResponse.json({ message: "Heat not found" }, { status: 404 });
+    }
+
+    if (!heat.platforms.length) {
+      return NextResponse.json({ message: "No platforms configured for this heat" }, { status: 400 });
+    }
 
   // Find or create signup for this user
   const userId = session.user.id;
@@ -156,15 +157,16 @@ export async function POST(request, { params }) {
     });
   }
 
-  const existingRolls = await prisma.heatRoll.findMany({
-    where: { heatSignupId: signup.id },
-    select: {
-      id: true,
-      platformId: true,
-      gameId: true,
-      game: { select: { hasWesternRelease: true } }
-    }
-  });
+    const existingRolls = await prisma.heatRoll.findMany({
+      where: { heatSignupId: signup.id },
+      select: {
+        id: true,
+        order: true,
+        platformId: true,
+        gameId: true,
+        game: { select: { hasWesternRelease: true } }
+      }
+    });
 
   const totalExisting = existingRolls.length;
   if (totalExisting >= heat.defaultGameCounter) {
@@ -343,33 +345,70 @@ export async function POST(request, { params }) {
     ? chosenIndices[Math.floor(Math.random() * chosenIndices.length)]
     : Math.floor(Math.random() * wheelGames.length);
 
-  const chosenGame = wheelGames[chosenIndex];
+    const chosenGame = wheelGames[chosenIndex];
 
-  const newOrder = totalExisting + 1;
+    // Order must be unique per signup. After technical veto deletes, roll count no longer
+    // corresponds to the highest order, so use max(order)+1.
+    const maxExistingOrder = existingRolls.reduce(
+      (acc, roll) => Math.max(acc, Number(roll.order) || 0),
+      0
+    );
 
-  const createdRoll = await prisma.heatRoll.create({
-    data: {
-      heatSignupId: signup.id,
-      gameId: chosenGame.id,
-      platformId: chosenPlatformId,
-      order: newOrder
-    },
-    include: {
-      game: {
+    async function createRollWithOrder(order) {
+      return prisma.heatRoll.create({
+        data: {
+          heatSignupId: signup.id,
+          gameId: chosenGame.id,
+          platformId: chosenPlatformId,
+          order
+        },
         include: {
-          platforms: { select: { id: true, name: true, abbreviation: true } }
+          game: {
+            include: {
+              platforms: { select: { id: true, name: true, abbreviation: true } }
+            }
+          },
+          platform: { select: { id: true, name: true, abbreviation: true } }
         }
-      },
-      platform: { select: { id: true, name: true, abbreviation: true } }
+      });
     }
-  });
 
-  return NextResponse.json({
-    roll: createdRoll,
-    wheel: {
-      games: wheelGames,
-      chosenIndex
-    },
-    targets
-  });
+    let createdRoll;
+    try {
+      createdRoll = await createRollWithOrder(maxExistingOrder + 1);
+    } catch (err) {
+      // Rare race: two rolls at once. Retry once with the latest max.
+      if (err?.code === 'P2002') {
+        const latest = await prisma.heatRoll.aggregate({
+          where: { heatSignupId: signup.id },
+          _max: { order: true }
+        });
+        const nextOrder = (latest?._max?.order || 0) + 1;
+        createdRoll = await createRollWithOrder(nextOrder);
+      } else {
+        throw err;
+      }
+    }
+
+    return NextResponse.json({
+      roll: createdRoll,
+      wheel: {
+        games: wheelGames,
+        chosenIndex
+      },
+      targets
+    });
+  } catch (err) {
+    console.error('Heat roll error', err);
+    if (err?.code === 'P2002') {
+      return NextResponse.json(
+        { message: 'Roll order conflict. Please try rolling again.' },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(
+      { message: err?.message ? String(err.message) : 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }

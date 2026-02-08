@@ -132,9 +132,10 @@ export default function HeatRollClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ platformTargets, westernRequired })
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(json?.message || "Failed to roll");
+        const msg = json?.message || `Failed to roll (HTTP ${res.status})`;
+        throw new Error(msg);
       }
       if (json?.targets) {
         setPlatformTargets(json.targets);
