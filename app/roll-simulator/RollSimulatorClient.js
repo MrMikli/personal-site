@@ -210,8 +210,7 @@ export default function RollSimulatorClient({ platforms }) {
         >
           <h2 style={{ margin: 0, fontSize: 16, color: "#333" }}>Configuration</h2>
           <div style={{ fontSize: 13, color: "#444", maxWidth: 520 }}>
-            Choose which consoles to roll from. This simulator never saves rolls
-            or ties them to any user or heat.
+            Choose which consoles to roll from. 
           </div>
           <div
             style={{
@@ -297,9 +296,6 @@ export default function RollSimulatorClient({ platforms }) {
         }}
       >
         <div style={{ textAlign: "center", maxWidth: 480 }}>
-          <p style={{ color: "#666", marginBottom: 8 }}>
-            This simulator is just for fun and experimentation.
-          </p>
           <div
             style={{
               marginTop: 4,
@@ -413,7 +409,7 @@ export default function RollSimulatorClient({ platforms }) {
             fontWeight: 600
           }}
         >
-          {isRolling ? "Rolling..." : "Let&apos;s go gambling!"}
+          {isRolling ? "Rolling..." : "Let's go gambling!"}
         </button>
       </section>
     </>
