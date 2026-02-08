@@ -87,6 +87,22 @@ export default function HeatRollClient({
 
   const volumeFillClass = styles[`volumeFill${volumePct}`] || styles.volumeFill0;
 
+  function stopAudioImmediate() {
+    if (!audioRef.current) return;
+    try {
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current);
+        fadeTimeoutRef.current = null;
+      }
+      if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+        fadeIntervalRef.current = null;
+      }
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    } catch (_e) {}
+  }
+
   // Ensure fresh server-rendered props when revisiting via back/forward.
   useEffect(() => {
     router.refresh();
@@ -146,19 +162,20 @@ export default function HeatRollClient({
       fadeIntervalRef.current = null;
     }
     try {
-      // Start CS:GO case opening sound when rolling begins
+      // Prime audio under the user gesture to avoid autoplay restrictions,
+      // but keep it silent until the wheel animation actually starts.
       if (!isMuted && volume > 0) {
         if (!audioRef.current) {
           const audio = new Audio(
             "/CS_GO%20Case%20Knife%20Opening%20Sound%20Effect.mp3"
           );
           audio.loop = true;
-          audio.volume = volume;
+          audio.volume = 0;
           audioRef.current = audio;
         }
         const audio = audioRef.current;
         audio.currentTime = 0;
-        audio.volume = volume;
+        audio.volume = 0;
         audio.play().catch(() => {});
       }
     } catch (_e) {
@@ -182,6 +199,15 @@ export default function HeatRollClient({
       }
       if (json?.wheel && json?.roll) {
         hasWheel = true;
+
+        // Sync audio to the moment the wheel begins.
+        if (audioRef.current) {
+          try {
+            audioRef.current.currentTime = 0;
+            audioRef.current.volume = isMuted ? 0 : volume;
+          } catch (_e) {}
+        }
+
         setWheel(json.wheel);
         setPendingRoll(json.roll);
       } else if (json?.roll) {
@@ -191,40 +217,14 @@ export default function HeatRollClient({
     } catch (e) {
       setError(String(e.message || e));
       // On error, stop any playing audio immediately to stop infinite loops
-      if (audioRef.current) {
-        try {
-          if (fadeTimeoutRef.current) {
-            clearTimeout(fadeTimeoutRef.current);
-            fadeTimeoutRef.current = null;
-          }
-          if (fadeIntervalRef.current) {
-            clearInterval(fadeIntervalRef.current);
-            fadeIntervalRef.current = null;
-          }
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-        } catch (_e) {}
-      }
+      stopAudioImmediate();
     } finally {
       // If no wheel animation is running, clear rolling state immediately
       if (!hasWheel) {
         setIsRolling(false);
         rollingRef.current = false;
         // Also stop audio in this path since there is no animation
-        if (audioRef.current) {
-          try {
-            if (fadeTimeoutRef.current) {
-              clearTimeout(fadeTimeoutRef.current);
-              fadeTimeoutRef.current = null;
-            }
-            if (fadeIntervalRef.current) {
-              clearInterval(fadeIntervalRef.current);
-              fadeIntervalRef.current = null;
-            }
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-          } catch (_e) {}
-        }
+        stopAudioImmediate();
       }
     }
   }
@@ -617,6 +617,7 @@ export default function HeatRollClient({
           <RollingWheel
             games={wheel.games}
             chosenIndex={wheel.chosenIndex}
+            startDelayMs={1500}
             onComplete={handleWheelComplete}
           />
         )}

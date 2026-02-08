@@ -11,14 +11,15 @@ const CARD_WIDTH = 150; // should stay in sync with GameCard maxWidth
 const SLOT_GAP = 8;
 const VISIBLE_SLOTS = 5;
 
-export default function RollingWheel({ games, chosenIndex, onComplete }) {
+export default function RollingWheel({ games, chosenIndex, onComplete, startDelayMs = 0 }) {
   if (!games || games.length === 0) return null;
 
   // Duplicate games so we can scroll further and land on the chosen one in the middle.
   // Use a middle copy as the target region so there are always cards on both
   // sides of the chosen game, avoiding an empty tail when the last game is picked.
+  // Keep this low to avoid rendering too many images/cards (performance).
   const COPIES = 5;
-  const TARGET_COPY_INDEX = 2; // middle copy (0-based)
+  const TARGET_COPY_INDEX = Math.floor(COPIES / 2); // middle copy (0-based)
   const stripGames = Array(COPIES).fill(games).flat();
   const baseOffset = games.length * TARGET_COPY_INDEX; // keep endX <= 0
   const targetIndex = baseOffset + (chosenIndex ?? 0);
@@ -40,6 +41,8 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
   // direction flips caused by animating from the previous end position.
   const rollKey = `${chosenIndex ?? 0}-${games.map((g) => g.id).join("-")}`;
 
+  const startBlurPx = 10;
+
   function handleAnimationComplete() {
     setFinished(true);
     if (onComplete) onComplete();
@@ -55,11 +58,19 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
       <motion.div
         key={rollKey}
         className={styles.strip}
-        initial={{ x: 0 }}
-        animate={{ x: endX }}
+        initial={{ x: 0, filter: `blur(${startBlurPx}px)` }}
+        animate={{ x: endX, filter: "blur(0px)" }}
         transition={{
-          duration: 8,
-          ease: [0.05, 0.9, 0.25, 1]
+          x: {
+            delay: startDelayMs / 1000,
+            duration: 7,
+            ease: [0.05, 0.9, 0.25, 1]
+          },
+          filter: {
+            delay: startDelayMs / 1000,
+            duration: 1,
+            ease: "easeOut"
+          }
         }}
         onAnimationComplete={handleAnimationComplete}
       >

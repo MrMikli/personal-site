@@ -63,6 +63,8 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
             src={game.coverUrl || "/placeholder-cover.png"}
             alt={game.name}
             className={styles.cover}
+            loading="lazy"
+            decoding="async"
           />
         </Link>
       ) : (
@@ -71,6 +73,8 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
           src={game.coverUrl || "/placeholder-cover.png"}
           alt={game.name}
           className={styles.cover}
+          loading={isWheel ? "lazy" : undefined}
+          decoding={isWheel ? "async" : undefined}
         />
       )}
       <div
