@@ -33,10 +33,7 @@ export async function POST(request) {
         platforms: { some: { id: pid } },
         ...(onlyWestern
           ? {
-              OR: [
-                { gamePlatforms: { some: { platformId: pid, hasWesternRelease: true } } },
-                { hasWesternRelease: true }
-              ]
+              gamePlatforms: { some: { platformId: pid, hasWesternRelease: true } }
             }
           : {})
       },

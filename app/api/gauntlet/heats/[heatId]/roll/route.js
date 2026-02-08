@@ -230,10 +230,7 @@ export async function POST(request, { params }) {
       0
     );
   } else {
-    existingWestern = existingRolls.reduce(
-      (acc, roll) => (roll.game?.hasWesternRelease ? acc + 1 : acc),
-      0
-    );
+    existingWestern = 0;
   }
   const rollsLeft = heat.defaultGameCounter - totalExisting;
   const neededWestern = Math.max(0, westernRequired - existingWestern);
