@@ -4,6 +4,7 @@ import { getSession } from "../../../../lib/session";
 import { prisma } from "@/lib/prisma";
 import HeatRollClient from "../HeatRollClient";
 import styles from "./page.module.css";
+import { makeHeatSlug, parseHeatSlug, slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,47 @@ export default async function HeatGameSelectionPage({ params }) {
     redirect("/login");
   }
 
-  const heatId = params.heatId;
+  const heatParam = params.heatId;
 
-  const heat = await prisma.heat.findUnique({
-    where: { id: heatId },
+  // Back-compat: if someone hits /heat/<heatId>, redirect to the canonical slug URL.
+  const byId = await prisma.heat.findUnique({
+    where: { id: heatParam },
+    select: {
+      id: true,
+      order: true,
+      name: true,
+      gauntlet: { select: { name: true } }
+    }
+  });
+
+  if (byId) {
+    const slug = makeHeatSlug({
+      gauntletName: byId.gauntlet?.name || "gauntlet",
+      heatName: byId.name || `Heat ${byId.order}`,
+      heatOrder: byId.order
+    });
+    redirect(`/gauntlet/heat/${slug}`);
+  }
+
+  const parsed = parseHeatSlug(heatParam);
+  if (!parsed) {
+    redirect("/gauntlet");
+  }
+
+  const gauntlets = await prisma.gauntlet.findMany({
+    select: { id: true, name: true }
+  });
+
+  const matchedGauntlet = gauntlets.find((g) => slugify(g.name) === parsed.gauntletSlug) || null;
+  if (!matchedGauntlet) {
+    redirect("/gauntlet");
+  }
+
+  const heat = await prisma.heat.findFirst({
+    where: {
+      gauntletId: matchedGauntlet.id,
+      order: parsed.order
+    },
     include: {
       gauntlet: { select: { id: true, name: true } },
       platforms: { select: { id: true, name: true, abbreviation: true } },
@@ -45,6 +83,16 @@ export default async function HeatGameSelectionPage({ params }) {
 
   if (!heat) {
     redirect("/gauntlet");
+  }
+
+  // If the slug's name parts don't match (e.g., heat renamed), redirect to canonical.
+  const canonicalSlug = makeHeatSlug({
+    gauntletName: heat.gauntlet?.name || "gauntlet",
+    heatName: heat.name || `Heat ${heat.order}`,
+    heatOrder: heat.order
+  });
+  if (heatParam !== canonicalSlug) {
+    redirect(`/gauntlet/heat/${canonicalSlug}`);
   }
 
   const platformsLabel = heat.platforms

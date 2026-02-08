@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import styles from "./GauntletClient.module.css";
+import { makeHeatSlug } from "@/lib/slug";
 
 function formatDate(d) {
   if (!d) return "";
@@ -275,7 +276,13 @@ export default function GauntletClient({ current, upcoming, previous }) {
                                     Heat locked - complete previous heat{previousHeatLabel ? ` (${previousHeatLabel})` : ""}
                                   </span>
                                 ) : (
-                                  <Link href={`/gauntlet/heat/${h.id}`}>
+                                  <Link
+                                    href={`/gauntlet/heat/${makeHeatSlug({
+                                      gauntletName: selectedGauntlet.name,
+                                      heatName: h.name || `Heat ${h.order}`,
+                                      heatOrder: h.order
+                                    })}`}
+                                  >
                                     <button
                                       type="button"
                                       className={`${styles.actionButton} ${isHeatOver ? styles.actionButtonDim : ""}`}

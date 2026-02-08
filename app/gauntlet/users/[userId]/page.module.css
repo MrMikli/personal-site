@@ -1,0 +1,105 @@
+.container {
+  display: grid;
+  gap: 16px;
+}
+
+.header {
+  display: grid;
+  gap: 6px;
+}
+
+.title {
+  margin: 0;
+}
+
+.subtitle {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+}
+
+.selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.pillActive {
+  border-color: #1976d2;
+  background: #1976d2;
+  color: #ffffff;
+}
+
+.card {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.heatHeader {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.heatTitle {
+  margin: 0;
+}
+
+.heatMeta {
+  color: #666;
+  font-size: 13px;
+}
+
+.row {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.label {
+  font-size: 12px;
+  color: #666;
+}
+
+.value {
+  font-size: 14px;
+}
+
+.muted {
+  color: #777;
+  font-style: italic;
+}
+
+.rollList {
+  display: grid;
+  gap: 4px;
+}
+
+.rollItem {
+  font-size: 13px;
+}
+
+.statusBeaten {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.statusGivenUp {
+  color: #b71c1c;
+  font-weight: 600;
+}
+
+.statusUnbeaten {
+  color: #444;
+  font-weight: 600;
+}

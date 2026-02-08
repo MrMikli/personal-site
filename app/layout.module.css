@@ -18,8 +18,27 @@
   align-items: center;
 }
 
-.signedInAs {
-  opacity: 0.7;
+.userLink {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.85;
+}
+
+.userLink:hover {
+  opacity: 1;
+}
+
+.userIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.username {
+  white-space: nowrap;
 }
 
 .main {

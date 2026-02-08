@@ -27,6 +27,22 @@ const STATUS_LABELS = {
   GIVEN_UP: "Given up"
 };
 
+function TrophyIcon({ className }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+    >
+      <path
+        fill="currentColor"
+        d="M19 4h-2V3H7v1H5a1 1 0 0 0-1 1v2a5 5 0 0 0 5 5h.1A5.99 5.99 0 0 0 11 14.9V17H8v2h8v-2h-3v-2.1A5.99 5.99 0 0 0 14.9 12H15a5 5 0 0 0 5-5V5a1 1 0 0 0-1-1M6 7V6h1v4.9A3 3 0 0 1 6 7m12 0a3 3 0 0 1-1 3.9V6h1Z"
+      />
+    </svg>
+  );
+}
+
 export default async function ScoreboardPage({ params }) {
   const session = await getSession();
   if (!session?.user) {
@@ -43,7 +59,7 @@ export default async function ScoreboardPage({ params }) {
     include: {
       heats: {
         orderBy: { order: "asc" },
-        select: { id: true, order: true, name: true }
+        select: { id: true, order: true, name: true, endsAt: true }
       },
       users: {
         select: { id: true, username: true }
@@ -126,6 +142,25 @@ export default async function ScoreboardPage({ params }) {
     return String(a.username || "").localeCompare(String(b.username || ""));
   });
 
+  // Gauntlet is considered "over" once the end date of the last heat has concluded.
+  const now = new Date();
+  const maxEnd = heats.reduce((max, h) => {
+    const d = h.endsAt ? new Date(h.endsAt) : null;
+    if (!d || Number.isNaN(d.getTime())) return max;
+    return !max || d > max ? d : max;
+  }, null);
+  const gauntletOver = (() => {
+    if (!maxEnd) return false;
+    const endOfDay = new Date(maxEnd);
+    endOfDay.setHours(23, 59, 59, 999);
+    return now.getTime() > endOfDay.getTime();
+  })();
+
+  const maxPoints = participants.length ? participants[0].points : 0;
+  const topCount = participants.filter((p) => p.points === maxPoints).length;
+  const hasSingleWinner = gauntletOver && participants.length > 0 && topCount === 1;
+  const winnerUserId = hasSingleWinner ? participants[0].id : null;
+
   return (
     <div className={styles.container}>
       <div>
@@ -174,7 +209,17 @@ export default async function ScoreboardPage({ params }) {
                 participants.map((p) => (
                   <tr key={p.id}>
                     <td className="table-center">
-                      {p.username}
+                      <div className={styles.playerCell}>
+                        <div className={styles.playerName}>
+                          {p.username}
+                          {winnerUserId === p.id && (
+                            <TrophyIcon className={styles.trophy} />
+                          )}
+                        </div>
+                        <Link className={styles.seeRollsLink} href={`/gauntlet/users/${encodeURIComponent(p.username)}?gauntletId=${gauntletId}`}>
+                          See all rolls
+                        </Link>
+                      </div>
                     </td>
                     <td className="table-center font-tabular">
                       {p.points}

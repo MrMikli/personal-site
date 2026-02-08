@@ -4,6 +4,22 @@ import { getSession } from "../lib/session";
 import styles from "./layout.module.css";
 import AdminMaskToggle from "./AdminMaskToggle";
 
+function PersonIcon(props) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <path
+        fill="currentColor"
+        d="M12 12a4 4 0 1 0-4-4a4 4 0 0 0 4 4m0 2c-4.42 0-8 2-8 4.5V21h16v-2.5c0-2.5-3.58-4.5-8-4.5"
+      />
+    </svg>
+  );
+}
+
 export const metadata = {
   title: "Funny Games 1997",
   description: "Site for hosting Funny Games 1997 events and features.",
@@ -32,7 +48,10 @@ export default async function RootLayout({ children }) {
           <div className={styles.userArea}>
             {user ? (
               <>
-                <span className={styles.signedInAs}>Signed in as {user.username}</span>
+                <Link href={`/gauntlet/users/${encodeURIComponent(user.username)}`} className={styles.userLink}>
+                  <PersonIcon className={styles.userIcon} />
+                  <span className={styles.username}>{user.username}</span>
+                </Link>
                 {user.isAdminActual && (
                   <AdminMaskToggle enabled={!!session.viewAsNonAdmin} />
                 )}

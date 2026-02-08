@@ -23,3 +23,26 @@
 .emptyCell {
   padding: 12px;
 }
+
+.playerCell {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.playerName {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.trophy {
+  width: 14px;
+  height: 14px;
+  color: #d4af37;
+}
+
+.seeRollsLink {
+  font-size: 12px;
+  opacity: 0.85;
+}

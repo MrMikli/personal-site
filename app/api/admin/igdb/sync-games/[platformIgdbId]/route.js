@@ -89,3 +89,5 @@ export async function POST(_req, { params }) {
     console.error('IGDB sync error', err);
     return NextResponse.json({ message: 'Failed to sync games from IGDB' }, { status: 500 });
   }
+
+}
