@@ -219,6 +219,7 @@ export default async function GauntletPage() {
       <h1>Retro Game Gauntlet</h1>
       <p>Welcome, {session.user.username}</p>
 
+      <a href="/gauntlet/rules"> I don't get it (idgi)</a>
       <section>
         <h2>Gauntlets</h2>
         <GauntletClient current={current} upcoming={upcoming} previous={previous} />
