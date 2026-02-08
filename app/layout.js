@@ -20,6 +20,7 @@ export default async function RootLayout({ children }) {
         <header style={{ padding: "12px", borderBottom: "1px solid #eee", display: "flex", gap: 12, alignItems: "center" }}>
           <div style={{ display: "flex", gap: 12 }}>
             <Link href="/">Home</Link>
+            <Link href="/roll-simulator">Roll simulator</Link>
             {user && <Link href="/gauntlet">Retro Game Gauntlet</Link>}
             {user?.isAdmin && <Link href="/admin">Admin</Link>}
           </div>
