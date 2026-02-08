@@ -29,6 +29,8 @@ export default function RollSimulatorClient({ platforms }) {
 
   const hasAnySelected = selectedPlatformIds.length > 0;
 
+  const wheelStartDelayMs = 1500;
+
   function togglePlatform(id) {
     setSelectedPlatformIds((prev) => {
       if (prev.includes(id)) {
@@ -149,18 +151,20 @@ export default function RollSimulatorClient({ platforms }) {
     }
 
     try {
+      // Prime audio under the user gesture to avoid autoplay restrictions,
+      // but keep it silent until the wheel animation is ready.
       if (!isMuted && volume > 0) {
         if (!audioRef.current) {
           const audio = new Audio(
             "/CS_GO%20Case%20Knife%20Opening%20Sound%20Effect.mp3"
           );
           audio.loop = true;
-          audio.volume = volume;
+          audio.volume = 0;
           audioRef.current = audio;
         }
         const audio = audioRef.current;
         audio.currentTime = 0;
-        audio.volume = volume;
+        audio.volume = 0;
         audio.play().catch(() => {});
       }
     } catch (_e) {}
@@ -179,7 +183,17 @@ export default function RollSimulatorClient({ platforms }) {
         throw new Error(json?.message || "Failed to roll");
       }
       if (json?.wheel) {
+        // Sync audio to the moment the wheel begins (before motion starts).
+        if (audioRef.current) {
+          try {
+            audioRef.current.currentTime = 0;
+            audioRef.current.volume = isMuted ? 0 : volume;
+          } catch (_e) {}
+        }
         setWheel(json.wheel);
+      } else {
+        stopAudioImmediately();
+        setIsRolling(false);
       }
     } catch (e) {
       setError(String(e.message || e));
@@ -325,6 +339,7 @@ export default function RollSimulatorClient({ platforms }) {
           <RollingWheel
             games={wheel.games}
             chosenIndex={wheel.chosenIndex}
+            startDelayMs={wheelStartDelayMs}
             onComplete={handleWheelComplete}
           />
         )}
