@@ -1,14 +1,7 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getIronSession } from 'iron-session';
-import { cookies } from 'next/headers';
-import { z } from 'zod';
-
-const sessionOptions = {
-  password: process.env.IRON_SESSION_PASSWORD,
-  cookieName: 'miklis_session',
-  cookieOptions: { secure: process.env.NODE_ENV === 'production' }
-};
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
+import { z } from "zod";
 
 const ToggleSchema = z.object({
   username: z.string().min(1),
@@ -16,15 +9,15 @@ const ToggleSchema = z.object({
 });
 
 export async function POST(request) {
-  const session = await getIronSession(cookies(), sessionOptions);
+  const session = await getSession();
   if (!session?.user?.isAdmin) {
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   const body = await request.json().catch(() => ({}));
   const parsed = ToggleSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ message: 'Invalid payload' }, { status: 400 });
+    return NextResponse.json({ message: "Invalid payload" }, { status: 400 });
   }
 
   const { username, isAdmin } = parsed.data;
@@ -35,7 +28,7 @@ export async function POST(request) {
   }).catch(() => null);
 
   if (!updated) {
-    return NextResponse.json({ message: 'User not found' }, { status: 404 });
+    return NextResponse.json({ message: "User not found" }, { status: 404 });
   }
 
   return NextResponse.json({ user: updated });

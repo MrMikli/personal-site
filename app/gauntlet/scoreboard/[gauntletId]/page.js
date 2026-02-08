@@ -133,7 +133,7 @@ export default async function ScoreboardPage({ params }) {
       </div>
 
       <div className={styles.center}>
-        <h1 className={styles.title}>{gauntlet.name} — Scoreboard</h1>
+        <h1 className={styles.title}>{gauntlet.name} - Scoreboard</h1>
         <div className={styles.note}>
           1 point per heat marked as <strong>Beaten</strong>
         </div>
@@ -146,10 +146,10 @@ export default async function ScoreboardPage({ params }) {
           <table>
             <thead>
               <tr>
-                <th className="table-sticky-left">
+                <th className="table-center">
                   Player
                 </th>
-                <th className="table-right font-tabular">
+                <th className="table-center font-tabular table-col-max-80">
                   Points
                 </th>
                 {heats.map((h) => (
@@ -173,10 +173,10 @@ export default async function ScoreboardPage({ params }) {
               ) : (
                 participants.map((p) => (
                   <tr key={p.id}>
-                    <td className="table-sticky-left-cell">
+                    <td className="table-center">
                       {p.username}
                     </td>
-                    <td className="table-right font-tabular">
+                    <td className="table-center font-tabular">
                       {p.points}
                     </td>
                     {heats.map((h) => {
@@ -189,7 +189,7 @@ export default async function ScoreboardPage({ params }) {
                         ? `${game.name}${year ? ` (${year})` : ""}`
                         : cell
                           ? "No game picked"
-                          : "—";
+                          : "-";
 
                       const statusLabel = status ? (STATUS_LABELS[status] || status) : "";
 

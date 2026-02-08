@@ -2,10 +2,14 @@ import Link from "next/link";
 import "./globals.css";
 import { getSession } from "../lib/session";
 import styles from "./layout.module.css";
+import AdminMaskToggle from "./AdminMaskToggle";
 
 export const metadata = {
   title: "Funny Games 1997",
   description: "Site for hosting Funny Games 1997 events and features.",
+  icons: {
+    icon: "/wikchud.webp"
+  }
 };
 
 // Ensure the layout re-renders on each request/navigation so session changes are visible immediately
@@ -29,6 +33,9 @@ export default async function RootLayout({ children }) {
             {user ? (
               <>
                 <span className={styles.signedInAs}>Signed in as {user.username}</span>
+                {user.isAdminActual && (
+                  <AdminMaskToggle enabled={!!session.viewAsNonAdmin} />
+                )}
                 <form action="/api/auth/logout" method="post">
                   <button type="submit">Logout</button>
                 </form>

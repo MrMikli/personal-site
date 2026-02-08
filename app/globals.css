@@ -69,7 +69,10 @@ tbody tr:hover { background: var(--table-row-hover); }
   font-weight: 600;
 }
 
+.table-center { text-align: center; }
+
 .table-col-min-220 { min-width: 220px; }
+.table-col-max-80 { max-width: 80px; width: 80px;}
 
 .text-muted { color: var(--table-muted); }
 .text-status-beaten { color: #4ade80; }

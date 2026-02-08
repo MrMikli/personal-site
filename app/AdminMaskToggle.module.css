@@ -1,0 +1,13 @@
+.wrap {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  user-select: none;
+  opacity: 0.85;
+}
+
+.label {
+  font-size: 12px;
+  opacity: 0.9;
+  white-space: nowrap;
+}
