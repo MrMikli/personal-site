@@ -19,6 +19,7 @@ export default function RulesPage() {
                 the last heat wins.
                 <br />
                 <br />
+                Oh, and if at all possible, you should be streaming that game on Discord to the other gamers. 
                 Good luck?
             </div>
 
@@ -40,7 +41,18 @@ export default function RulesPage() {
                         <li>Roll 10 NES and 0 SNES games</li>
                     </ul>
                 </div>
-                After rolling, you must pick one game from your rolled pool to be your target for that heat.
+                After rolling, you must pick one game from your rolled pool to be your target for that heat. <br />
+            </div>
+
+            <h3 className={styles.sectionTitle}>Versions</h3>
+            <div>
+                You can deviate from the exact roll in two ways: <br />
+                <ol>
+                    <li>If the game has a different version of the same game on the same platform (like, Metal Gear Solid 3: Subsistence vs. Metal Gear Solid 3: Snake Eater), you may play whatever version you want.</li>
+                    <li>If the game has a modern port to PC, and the game is reasonably the same (like, The Thing Remastered for PC vs. The Thing on PlayStation 2), you may play it on PC if you find that easier than emulating.</li>
+                </ol>
+                In either case, make sure to confirm with your fellow gauntlet participants. <br />
+                Otherwise you must play that game in the exact version that was rolled, whether that be on the actual console, through fan emulation or an official emulation release like Virtual Console or PlayStation Classics, etc. <br />
             </div>
 
             <h3 className={styles.sectionTitle}>Technical Vetos</h3>
@@ -48,7 +60,8 @@ export default function RulesPage() {
                 It's possible to roll games that simply cannot be acquired, or don't run, or maybe aren't games or retro games
                 at all. These games can be vetoed and removed from your roll pool for free, but you must have one other gamer
                 confirm it with you. <br />
-                The same goes for games that aren't available in English language. Note that you're totally allowed to try and beat a fully Japanese/Italian/German game, you just don't have to.
+                The same goes for games that aren't available in English language. Note that you're totally allowed to try and beat a fully Japanese/Italian/German game, you just don't have to. <br />
+                You may also veto games you've already played, but you're also allowed to try and beat them again if you want. <br />
             </div>
 
             <h3 className={styles.sectionTitle}>Glitches, Bugs, Exploits, "Cheating"</h3>
