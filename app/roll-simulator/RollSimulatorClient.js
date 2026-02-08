@@ -340,6 +340,7 @@ export default function RollSimulatorClient({ platforms }) {
             games={wheel.games}
             chosenIndex={wheel.chosenIndex}
             startDelayMs={wheelStartDelayMs}
+            slotPlatforms={wheel.slotPlatforms}
             onComplete={handleWheelComplete}
           />
         )}

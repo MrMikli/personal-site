@@ -11,7 +11,7 @@ const CARD_WIDTH = 150; // should stay in sync with GameCard maxWidth
 const SLOT_GAP = 8;
 const VISIBLE_SLOTS = 5;
 
-export default function RollingWheel({ games, chosenIndex, onComplete, startDelayMs = 0 }) {
+export default function RollingWheel({ games, chosenIndex, onComplete, startDelayMs = 0, slotPlatforms = null }) {
   if (!games || games.length === 0) return null;
 
   // Duplicate games so we can scroll further and land on the chosen one in the middle.
@@ -76,6 +76,12 @@ export default function RollingWheel({ games, chosenIndex, onComplete, startDela
       >
         {stripGames.map((game, idx) => {
           const isSelected = finished && idx === targetIndex;
+          const slotPlatform = Array.isArray(slotPlatforms)
+            ? slotPlatforms[idx % games.length]
+            : null;
+          const slotPlatformLabel = slotPlatform
+            ? (slotPlatform.abbreviation ? slotPlatform.abbreviation : slotPlatform.name)
+            : null;
           const backlogSlug = game?.slug || "";
           const backlogUrl = backlogSlug
             ? `https://backloggd.com/games/${backlogSlug}/`
@@ -85,7 +91,7 @@ export default function RollingWheel({ games, chosenIndex, onComplete, startDela
             <div
               className={`${styles.cardWrap} ${isSelected ? styles.cardWrapSelected : ""}`.trim()}
             >
-              <GameCard game={game} variant="wheel" />
+              <GameCard game={game} variant="wheel" platformLabelOverride={slotPlatformLabel} />
             </div>
           );
 

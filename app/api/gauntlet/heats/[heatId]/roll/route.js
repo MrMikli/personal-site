@@ -367,6 +367,12 @@ export async function POST(request, { params }) {
   shuffleInPlace(shuffled);
   wheelGames = shuffled.map((x) => x.g);
 
+  const platformById = new Map((heat.platforms || []).map((p) => [p.id, p]));
+  const slotPlatforms = shuffled.map((x) => {
+    const p = platformById.get(x.platformId);
+    return p ? { id: p.id, name: p.name, abbreviation: p.abbreviation } : null;
+  });
+
   // Force the chosen index to land on a slot from chosenPlatformId.
   const chosenIndices = shuffled
     .map((x, idx) => (x.platformId === chosenPlatformId ? idx : -1))
@@ -424,7 +430,8 @@ export async function POST(request, { params }) {
       roll: createdRoll,
       wheel: {
         games: wheelGames,
-        chosenIndex
+        chosenIndex,
+        slotPlatforms
       },
       targets
     });

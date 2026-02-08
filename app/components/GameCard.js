@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import styles from "./GameCard.module.css";
 
-export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
+export default function GameCard({ game, variant = "pool", onTechnicalVeto, platformLabelOverride = null }) {
   if (!game) return null;
 
   let year = null;
@@ -25,9 +25,12 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
     ? `https://backloggd.com/games/${backlogSlug}/`
     : null;
 
-  const platformsLabel = (game.platforms || [])
-    .map((p) => (p.abbreviation ? p.abbreviation : p.name))
-    .join(", ");
+  const platformsLabel =
+    typeof platformLabelOverride === "string" && platformLabelOverride.trim()
+      ? platformLabelOverride.trim()
+      : (game.platforms || [])
+          .map((p) => (p.abbreviation ? p.abbreviation : p.name))
+          .join(", ");
 
   const isWheel = variant === "wheel";
 

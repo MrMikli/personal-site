@@ -618,6 +618,7 @@ export default function HeatRollClient({
             games={wheel.games}
             chosenIndex={wheel.chosenIndex}
             startDelayMs={1500}
+            slotPlatforms={wheel.slotPlatforms}
             onComplete={handleWheelComplete}
           />
         )}
@@ -664,6 +665,11 @@ export default function HeatRollClient({
                   key={roll.id}
                   game={roll.game}
                   variant="pool"
+                  platformLabelOverride={
+                    roll.platform
+                      ? (roll.platform.abbreviation || roll.platform.name)
+                      : null
+                  }
                   onTechnicalVeto={() => handleTechnicalVeto(roll.id)}
                 />
               ))}

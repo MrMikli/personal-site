@@ -72,7 +72,8 @@ export default async function HeatGameSelectionPage({ params }) {
                 include: {
                   platforms: { select: { id: true, name: true, abbreviation: true } }
                 }
-              }
+              },
+              platform: { select: { id: true, name: true, abbreviation: true } }
             }
           },
           selectedGame: {
