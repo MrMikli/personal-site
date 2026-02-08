@@ -613,15 +613,13 @@ export default function HeatRollClient({
           )}
         </div>
 
-        {wheel && (
-          <RollingWheel
-            games={wheel.games}
-            chosenIndex={wheel.chosenIndex}
-            startDelayMs={1500}
-            slotPlatforms={wheel.slotPlatforms}
-            onComplete={handleWheelComplete}
-          />
-        )}
+        <RollingWheel
+          games={wheel?.games || []}
+          chosenIndex={wheel?.chosenIndex}
+          startDelayMs={1500}
+          slotPlatforms={wheel?.slotPlatforms || null}
+          onComplete={handleWheelComplete}
+        />
 
         <button
           onClick={handleRoll}

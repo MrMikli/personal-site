@@ -177,7 +177,6 @@ export default function RollSimulatorClient({ platforms }) {
     }
     setError("");
     setIsRolling(true);
-    setWheel(null);
 
     // Cancel any in-progress fade-out when starting a new roll
     if (fadeTimeoutRef.current) {
@@ -411,15 +410,13 @@ export default function RollSimulatorClient({ platforms }) {
           </div>
         </div>
 
-        {wheel && (
-          <RollingWheel
-            games={wheel.games}
-            chosenIndex={wheel.chosenIndex}
-            startDelayMs={wheelStartDelayMs}
-            slotPlatforms={wheel.slotPlatforms}
-            onComplete={handleWheelComplete}
-          />
-        )}
+        <RollingWheel
+          games={wheel?.games || []}
+          chosenIndex={wheel?.chosenIndex}
+          startDelayMs={wheelStartDelayMs}
+          slotPlatforms={wheel?.slotPlatforms || null}
+          onComplete={handleWheelComplete}
+        />
 
         <button
           onClick={handleRoll}

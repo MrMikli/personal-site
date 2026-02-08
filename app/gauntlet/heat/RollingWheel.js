@@ -12,7 +12,17 @@ const SLOT_GAP = 8;
 const VISIBLE_SLOTS = 5;
 
 export default function RollingWheel({ games, chosenIndex, onComplete, startDelayMs = 0, slotPlatforms = null }) {
-  if (!games || games.length === 0) return null;
+  const hasGames = Array.isArray(games) && games.length > 0;
+
+  if (!hasGames) {
+    return (
+      <div className={styles.wheel}>
+        <div className={styles.placeholder}>
+          Roll to start
+        </div>
+      </div>
+    );
+  }
 
   // Duplicate games so we can scroll further and land on the chosen one in the middle.
   // Use a middle copy as the target region so there are always cards on both
