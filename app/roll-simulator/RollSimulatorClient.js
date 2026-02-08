@@ -4,11 +4,33 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import RollingWheel from "@/app/gauntlet/heat/RollingWheel";
 import styles from "./RollSimulatorClient.module.css";
 
+const STORAGE_KEY = "miklis_roll_simulator_config_v1";
+
 export default function RollSimulatorClient({ platforms }) {
-  const [selectedPlatformIds, setSelectedPlatformIds] = useState(
-    () => platforms.map((p) => p.id)
-  );
-  const [onlyWestern, setOnlyWestern] = useState(false);
+  const defaultPlatformIds = useMemo(() => platforms.map((p) => p.id), [platforms]);
+
+  const savedConfig = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      return parsed;
+    } catch (_e) {
+      return null;
+    }
+  }, []);
+
+  const [selectedPlatformIds, setSelectedPlatformIds] = useState(() => {
+    const validSet = new Set(defaultPlatformIds);
+    if (Array.isArray(savedConfig?.platformIds)) {
+      return savedConfig.platformIds.filter((id) => validSet.has(id));
+    }
+    return defaultPlatformIds;
+  });
+
+  const [onlyWestern, setOnlyWestern] = useState(() => Boolean(savedConfig?.onlyWestern));
   const [wheel, setWheel] = useState(null);
   const [isRolling, setIsRolling] = useState(false);
   const [error, setError] = useState("");
@@ -16,8 +38,12 @@ export default function RollSimulatorClient({ platforms }) {
   const audioRef = useRef(null);
   const fadeTimeoutRef = useRef(null);
   const fadeIntervalRef = useRef(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [volume, setVolume] = useState(0.5);
+  const [isMuted, setIsMuted] = useState(() => Boolean(savedConfig?.isMuted));
+  const [volume, setVolume] = useState(() => {
+    const v = Number(savedConfig?.volume);
+    if (!Number.isFinite(v)) return 0.5;
+    return Math.max(0, Math.min(1, v));
+  });
 
   const volumePct = useMemo(() => {
     const pct = isMuted ? 0 : Math.round((Number(volume) || 0) * 100);
@@ -29,6 +55,14 @@ export default function RollSimulatorClient({ platforms }) {
 
   const hasAnySelected = selectedPlatformIds.length > 0;
 
+  const selectedIdSet = useMemo(() => new Set(selectedPlatformIds), [selectedPlatformIds]);
+  const hasAnyPlatforms = defaultPlatformIds.length > 0;
+  const isAllSelected = useMemo(() => {
+    if (!hasAnyPlatforms) return false;
+    if (selectedPlatformIds.length !== defaultPlatformIds.length) return false;
+    return defaultPlatformIds.every((id) => selectedIdSet.has(id));
+  }, [defaultPlatformIds, hasAnyPlatforms, selectedIdSet, selectedPlatformIds.length]);
+
   const wheelStartDelayMs = 1500;
 
   function togglePlatform(id) {
@@ -39,6 +73,11 @@ export default function RollSimulatorClient({ platforms }) {
       }
       return [...prev, id];
     });
+  }
+
+  function handleToggleAllPlatforms() {
+    if (!hasAnyPlatforms) return;
+    setSelectedPlatformIds(isAllSelected ? [] : defaultPlatformIds);
   }
 
   function handleVolumeBarClick(event) {
@@ -208,6 +247,30 @@ export default function RollSimulatorClient({ platforms }) {
     };
   }, []);
 
+  useEffect(() => {
+    // If the available platforms change (sync, DB changes), drop invalid selections.
+    const validSet = new Set(defaultPlatformIds);
+    setSelectedPlatformIds((prev) => {
+      const next = prev.filter((id) => validSet.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [defaultPlatformIds]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          platformIds: selectedPlatformIds,
+          onlyWestern,
+          isMuted,
+          volume
+        })
+      );
+    } catch (_e) {}
+  }, [selectedPlatformIds, onlyWestern, isMuted, volume]);
+
   return (
     <>
       <div
@@ -220,6 +283,19 @@ export default function RollSimulatorClient({ platforms }) {
           <h2 className={styles.configTitle}>Configuration</h2>
           <div className={styles.configHelp}>
             Choose which consoles to roll from. 
+          </div>
+          <div className={styles.platformActions}>
+            <button
+              type="button"
+              className={styles.actionButton}
+              onClick={handleToggleAllPlatforms}
+              disabled={!hasAnyPlatforms}
+            >
+              {isAllSelected ? "Deselect all" : "Select all"}
+            </button>
+            <div className={styles.selectionCount}>
+              {selectedPlatformIds.length} / {platforms.length} selected
+            </div>
           </div>
           <div
             className={styles.platformList}

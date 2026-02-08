@@ -29,6 +29,35 @@
   max-width: 520px;
 }
 
+.platformActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.actionButton {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.actionButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.selectionCount {
+  font-size: 12px;
+  color: #6b7280;
+}
+
 .platformList {
   display: grid;
   gap: 8px;
