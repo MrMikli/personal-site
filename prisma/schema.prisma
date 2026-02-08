@@ -34,6 +34,7 @@ model Platform {
   generation   Int?
 
   games Game[]
+  gamePlatforms GamePlatform[]
   heats Heat[]
   // Rolled games in signups optionally reference a platform
   rolls HeatRoll[] @relation("HeatRollPlatform")
@@ -42,6 +43,21 @@ model Platform {
   updatedAt DateTime @updatedAt
 
   @@index([name])
+}
+
+model GamePlatform {
+  gameId           String
+  platformId       String
+  hasWesternRelease Boolean @default(false)
+
+  game     Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  platform Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([gameId, platformId])
+  @@index([platformId])
 }
 
 model Game {
@@ -59,6 +75,7 @@ model Game {
   hasWesternRelease Boolean @default(false)
 
   platforms         Platform[]
+  gamePlatforms     GamePlatform[]
   // Per-user selected game for a heat
   selectedInSignups HeatSignup[] @relation("HeatSignupSelectedGame")
   // Rolled appearances across signups

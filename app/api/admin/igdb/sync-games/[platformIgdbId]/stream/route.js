@@ -7,6 +7,7 @@ import {
   pickEarliestRelease,
   toCoverBigUrl,
   hasWesternRelease,
+  hasWesternReleaseForPlatform,
 } from '@/lib/igdbGames';
 
 export const runtime = 'nodejs';
@@ -61,6 +62,16 @@ export async function GET(req, { params }) {
       }
 
       try {
+        const platform = await prisma.platform.findUnique({
+          where: { igdbId: platformIgdbId },
+          select: { id: true }
+        });
+        if (!platform) {
+          send('error', { message: 'Platform not found' });
+          controller.close();
+          return;
+        }
+
         // Compute total count first for UI progress (best-effort)
         const countWhere = buildGameCountBody(platformIgdbId);
         let totalCount = 0;
@@ -100,6 +111,9 @@ export async function GET(req, { params }) {
                 where: { id: g.id },
                 data: { platforms: { disconnect: { igdbId: platformIgdbId } } }
               });
+              await prisma.gamePlatform.deleteMany({
+                where: { gameId: g.id, platformId: platform.id }
+              });
               disconnected++;
             }
             processedClear++;
@@ -136,6 +150,7 @@ export async function GET(req, { params }) {
             const earliest = pickEarliestRelease(g.release_dates);
             const coverUrl = toCoverBigUrl(g.cover);
             const western = hasWesternRelease(g.release_dates);
+            const westernForPlatform = hasWesternReleaseForPlatform(g.release_dates, platformIgdbId);
 
             const existing = await prisma.game.findUnique({
               where: { igdbId: g.id },
@@ -143,7 +158,7 @@ export async function GET(req, { params }) {
             });
 
             if (!existing) {
-              await prisma.game.create({
+              const created = await prisma.game.create({
                 data: {
                   igdbId: g.id,
                   name: g.name,
@@ -153,7 +168,14 @@ export async function GET(req, { params }) {
                   releaseDateHuman: earliest?.human ?? null,
                   hasWesternRelease: western,
                   platforms: { connect: { igdbId: platformIgdbId } }
-                }
+                },
+                select: { id: true }
+              });
+
+              await prisma.gamePlatform.upsert({
+                where: { gameId_platformId: { gameId: created.id, platformId: platform.id } },
+                update: { hasWesternRelease: westernForPlatform },
+                create: { gameId: created.id, platformId: platform.id, hasWesternRelease: westernForPlatform }
               });
               inserted++;
             } else {
@@ -175,6 +197,12 @@ export async function GET(req, { params }) {
                   data: { platforms: { connect: { igdbId: platformIgdbId } } }
                 });
               }
+
+              await prisma.gamePlatform.upsert({
+                where: { gameId_platformId: { gameId: existing.id, platformId: platform.id } },
+                update: { hasWesternRelease: westernForPlatform },
+                create: { gameId: existing.id, platformId: platform.id, hasWesternRelease: westernForPlatform }
+              });
               updated++;
             }
             processed++;

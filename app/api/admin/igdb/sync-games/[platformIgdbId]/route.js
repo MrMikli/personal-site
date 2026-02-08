@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { igdbRequest } from '@/lib/igdb';
-import { buildGameQuery, pickEarliestRelease, toCoverBigUrl, hasWesternRelease } from '@/lib/igdbGames';
+import { buildGameQuery, pickEarliestRelease, toCoverBigUrl, hasWesternRelease, hasWesternReleaseForPlatform } from '@/lib/igdbGames';
 
 export async function POST(_req, { params }) {
   const session = await getSession();
@@ -16,6 +16,14 @@ export async function POST(_req, { params }) {
   }
 
   try {
+    const platform = await prisma.platform.findUnique({
+      where: { igdbId: platformIgdbId },
+      select: { id: true }
+    });
+    if (!platform) {
+      return NextResponse.json({ message: 'Platform not found' }, { status: 404 });
+    }
+
     const pageSize = 500;
     let offset = 0;
     let processed = 0;
@@ -33,6 +41,7 @@ export async function POST(_req, { params }) {
         const earliest = pickEarliestRelease(g.release_dates);
         const coverUrl = toCoverBigUrl(g.cover);
         const western = hasWesternRelease(g.release_dates);
+        const westernForPlatform = hasWesternReleaseForPlatform(g.release_dates, platformIgdbId);
 
         const existing = await prisma.game.findUnique({
           where: { igdbId: g.id },
@@ -40,7 +49,7 @@ export async function POST(_req, { params }) {
         });
 
         if (!existing) {
-          await prisma.game.create({
+          const created = await prisma.game.create({
             data: {
               igdbId: g.id,
               name: g.name,
@@ -51,6 +60,13 @@ export async function POST(_req, { params }) {
               hasWesternRelease: western,
               platforms: { connect: { igdbId: platformIgdbId } },
             },
+            select: { id: true }
+          });
+
+          await prisma.gamePlatform.upsert({
+            where: { gameId_platformId: { gameId: created.id, platformId: platform.id } },
+            update: { hasWesternRelease: westernForPlatform },
+            create: { gameId: created.id, platformId: platform.id, hasWesternRelease: westernForPlatform }
           });
           inserted++;
         } else {
@@ -74,6 +90,12 @@ export async function POST(_req, { params }) {
             });
           }
           updated++;
+
+          await prisma.gamePlatform.upsert({
+            where: { gameId_platformId: { gameId: existing.id, platformId: platform.id } },
+            update: { hasWesternRelease: westernForPlatform },
+            create: { gameId: existing.id, platformId: platform.id, hasWesternRelease: westernForPlatform }
+          });
         }
         processed++;
       }

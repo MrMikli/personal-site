@@ -207,11 +207,34 @@ export async function POST(request, { params }) {
     return acc;
   }, {});
 
-  // Western-release requirement tracking
-  const existingWestern = existingRolls.reduce(
-    (acc, roll) => (roll.game?.hasWesternRelease ? acc + 1 : acc),
-    0
-  );
+  // Western-release requirement tracking (per rolled platform).
+  // Game.hasWesternRelease can be true due to another platform; for guarantees we need
+  // per-platform metadata when available.
+  let existingWestern = 0;
+  const westernPairs = existingRolls
+    .filter((r) => r.gameId && r.platformId)
+    .map((r) => ({ gameId: r.gameId, platformId: r.platformId }));
+
+  if (westernPairs.length) {
+    const rows = await prisma.gamePlatform.findMany({
+      where: { OR: westernPairs },
+      select: { gameId: true, platformId: true, hasWesternRelease: true }
+    });
+    const westernSet = new Set(
+      rows
+        .filter((r) => r.hasWesternRelease)
+        .map((r) => `${r.gameId}:${r.platformId}`)
+    );
+    existingWestern = westernPairs.reduce(
+      (acc, p) => (westernSet.has(`${p.gameId}:${p.platformId}`) ? acc + 1 : acc),
+      0
+    );
+  } else {
+    existingWestern = existingRolls.reduce(
+      (acc, roll) => (roll.game?.hasWesternRelease ? acc + 1 : acc),
+      0
+    );
+  }
   const rollsLeft = heat.defaultGameCounter - totalExisting;
   const neededWestern = Math.max(0, westernRequired - existingWestern);
   const mustBeWestern = neededWestern > 0 && neededWestern >= rollsLeft;
@@ -238,8 +261,7 @@ export async function POST(request, { params }) {
   }
 
   const baseWhere = {
-    ...(existingGameIds.length ? { id: { notIn: existingGameIds } } : {}),
-    ...(mustBeWestern ? { hasWesternRelease: true } : {})
+    ...(existingGameIds.length ? { id: { notIn: existingGameIds } } : {})
   };
 
   const eligibleIdsByPlatformId = {};
@@ -248,6 +270,14 @@ export async function POST(request, { params }) {
       where: {
         ...baseWhere,
         platforms: { some: { id: platformId } }
+        ,
+        ...(mustBeWestern
+          ? {
+              gamePlatforms: {
+                some: { platformId, hasWesternRelease: true }
+              }
+            }
+          : {})
       },
       select: { id: true }
     });
