@@ -4,7 +4,7 @@ import { getSession } from "../lib/session";
 
 export const metadata = {
   title: "Funny Games 1997",
-  description: "Personal site with auth scaffold"
+  description: "Site for hosting Funny Games 1997 events and features.",
 };
 
 // Ensure the layout re-renders on each request/navigation so session changes are visible immediately
