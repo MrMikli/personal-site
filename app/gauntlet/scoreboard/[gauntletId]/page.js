@@ -111,7 +111,8 @@ export default async function ScoreboardPage({ params }) {
   // For current/upcoming gauntlets, require explicit membership to see details.
   if (!gauntletOver) {
     const isMember = (gauntlet.users || []).some((u) => String(u.id) === String(session.user.id));
-    if (!isMember) {
+    const hasLegacySignup = signups.some((s) => String(s.user?.id) === String(session.user.id));
+    if (!isMember && !hasLegacySignup) {
       redirect("/gauntlet");
     }
   }

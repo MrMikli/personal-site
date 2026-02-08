@@ -42,7 +42,19 @@ async function ensureUserCanViewGauntletDetails({ gauntletId, userId }) {
   if (gauntletOver) return true;
 
   const isMember = Array.isArray(gauntlet.users) && gauntlet.users.length > 0;
-  return isMember;
+  if (isMember) return true;
+
+  // Back-compat: anyone who already rolled/picked/statused a heat (HeatSignup exists)
+  // should still be able to view this gauntlet’s details.
+  const legacySignup = await prisma.heatSignup.findFirst({
+    where: {
+      userId,
+      heat: { gauntletId }
+    },
+    select: { id: true }
+  });
+
+  return !!legacySignup;
 }
 
 export default async function HeatGameSelectionPage({ params }) {
