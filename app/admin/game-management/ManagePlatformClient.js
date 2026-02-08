@@ -33,6 +33,16 @@ export default function ManagePlatformClient({ platforms }) {
 
   const anyLoading = loading || bulkLoading;
 
+  const liveChunk = result?.chunk || null;
+  const liveProcessed = (result?.processed || 0) + (liveChunk?.processed || 0);
+  const liveInserted = (result?.inserted || 0) + (liveChunk?.inserted || 0);
+  const liveUpdated = (result?.updated || 0) + (liveChunk?.updated || 0);
+
+  const liveBulkChunk = bulkResult?.currentChunk || null;
+  const liveBulkProcessed = (bulkResult?.processed || 0) + (liveBulkChunk?.processed || 0);
+  const liveBulkInserted = (bulkResult?.inserted || 0) + (liveBulkChunk?.inserted || 0);
+  const liveBulkUpdated = (bulkResult?.updated || 0) + (liveBulkChunk?.updated || 0);
+
   function runEventSource(url, { onEvent } = {}) {
     return new Promise((resolve, reject) => {
       const es = new EventSource(url);
@@ -377,12 +387,12 @@ export default function ManagePlatformClient({ platforms }) {
               Platforms: {bulkResult.completedPlatforms ?? 0} / {bulkResult.totalPlatforms ?? 0}
               {bulkResult.currentPlatform ? ` (current: ${bulkResult.currentPlatform})` : ''}
             </div>
-            <div>Processed: {bulkResult.processed ?? 0}</div>
-            <div>Inserted: {bulkResult.inserted ?? 0}</div>
-            <div>Updated: {bulkResult.updated ?? 0}</div>
+            <div>Processed: {liveBulkProcessed}</div>
+            <div>Inserted: {liveBulkInserted}</div>
+            <div>Updated: {liveBulkUpdated}</div>
             {bulkResult.currentChunk && (
               <div>
-                Current chunk: offset {bulkResult.currentChunk.offset ?? 0} (processed {bulkResult.currentChunk.processed ?? 0})
+                Current chunk: offset {bulkResult.currentChunk.offset ?? 0} (processed {bulkResult.currentChunk.processed ?? 0} / {bulkResult.currentChunk.total ?? '?'})
               </div>
             )}
             {(bulkResult.errors?.length || 0) > 0 && (
@@ -439,10 +449,19 @@ export default function ManagePlatformClient({ platforms }) {
                   <div>Deleted (orphans): {result.clear.deleted ?? 0}</div>
                 </div>
               )}
-              <div>Processed: {result.processed ?? 0}{typeof result.total === 'number' ? ` / ${result.total}` : ''}</div>
-              <div>Inserted: {result.inserted ?? 0}</div>
-              <div>Updated: {result.updated ?? 0}</div>
-              {result.page && <div>Current page: {result.page} ({result.pageCount ?? 0} items)</div>}
+              <div>Processed: {liveProcessed}{typeof result.total === 'number' ? ` / ${result.total}` : ''}</div>
+              <div>Inserted: {liveInserted}</div>
+              <div>Updated: {liveUpdated}</div>
+              {result.chunk && (
+                <div>
+                  Current chunk: offset {result.chunk.offset ?? 0} (processed {result.chunk.processed ?? 0} / {result.chunk.total ?? '?'})
+                </div>
+              )}
+              {result.chunk?.page && (
+                <div>
+                  Current page: {result.chunk.page} ({result.chunk.pageCount ?? 0} items)
+                </div>
+              )}
             </div>
           )}
           {error && (
