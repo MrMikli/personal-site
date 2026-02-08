@@ -39,9 +39,10 @@ export default function ManagePlatformClient({ platforms }) {
   const liveUpdated = (result?.updated || 0) + (liveChunk?.updated || 0);
 
   const liveBulkChunk = bulkResult?.currentChunk || null;
-  const liveBulkProcessed = (bulkResult?.processed || 0) + (liveBulkChunk?.processed || 0);
-  const liveBulkInserted = (bulkResult?.inserted || 0) + (liveBulkChunk?.inserted || 0);
-  const liveBulkUpdated = (bulkResult?.updated || 0) + (liveBulkChunk?.updated || 0);
+  const liveBulkBase = bulkResult?.currentPlatformBase || null;
+  const liveBulkProcessed = (bulkResult?.processed || 0) + (liveBulkBase?.processed || 0) + (liveBulkChunk?.processed || 0);
+  const liveBulkInserted = (bulkResult?.inserted || 0) + (liveBulkBase?.inserted || 0) + (liveBulkChunk?.inserted || 0);
+  const liveBulkUpdated = (bulkResult?.updated || 0) + (liveBulkBase?.updated || 0) + (liveBulkChunk?.updated || 0);
 
   function runEventSource(url, { onEvent } = {}) {
     return new Promise((resolve, reject) => {
@@ -102,7 +103,7 @@ export default function ManagePlatformClient({ platforms }) {
     });
   }
 
-  async function syncPlatformChunked(igdbId, { onEvent } = {}) {
+  async function syncPlatformChunked(igdbId, { onEvent, onChunkDone } = {}) {
     // Smaller chunks for Vercel Hobby.
     const pageSize = 100;
     const maxPages = 1;
@@ -115,6 +116,7 @@ export default function ManagePlatformClient({ platforms }) {
       const done = await runEventSource(url, { onEvent });
 
       if (done?.phase === 'sync') {
+        onChunkDone?.(done);
         totals.processed += done.processed || 0;
         totals.inserted += done.inserted || 0;
         totals.updated += done.updated || 0;
@@ -135,7 +137,7 @@ export default function ManagePlatformClient({ platforms }) {
     setResult({ processed: 0, inserted: 0, updated: 0, chunk: null });
 
     try {
-      const totals = await syncPlatformChunked(selected.igdbId, {
+      await syncPlatformChunked(selected.igdbId, {
         onEvent: (type, data) => {
           if (type === 'total') {
             setResult((prev) => ({ ...(prev || {}), total: data.total }));
@@ -155,17 +157,18 @@ export default function ManagePlatformClient({ platforms }) {
               }
             }));
           }
+        },
+        onChunkDone: (done) => {
+          setResult((prev) => ({
+            ...(prev || {}),
+            processed: (prev?.processed || 0) + (done.processed || 0),
+            inserted: (prev?.inserted || 0) + (done.inserted || 0),
+            updated: (prev?.updated || 0) + (done.updated || 0),
+            total: typeof done.total === 'number' ? done.total : prev?.total,
+            chunk: null
+          }));
         }
       });
-
-      setResult((prev) => ({
-        ...(prev || {}),
-        processed: totals.processed,
-        inserted: totals.inserted,
-        updated: totals.updated,
-        total: typeof totals.total === 'number' ? totals.total : prev?.total,
-        chunk: null
-      }));
     } catch (e) {
       setError(e?.message || 'Sync error');
     } finally {
@@ -194,6 +197,7 @@ export default function ManagePlatformClient({ platforms }) {
       inserted: 0,
       updated: 0,
       currentPlatform: null,
+      currentPlatformBase: { processed: 0, inserted: 0, updated: 0 },
       currentChunk: null,
       errors: []
     });
@@ -202,11 +206,12 @@ export default function ManagePlatformClient({ platforms }) {
       setBulkResult((prev) => ({
         ...(prev || {}),
         currentPlatform: formatName(p),
+        currentPlatformBase: { processed: 0, inserted: 0, updated: 0 },
         currentChunk: null
       }));
 
       try {
-        const totals = await syncPlatformChunked(p.igdbId, {
+        await syncPlatformChunked(p.igdbId, {
           onEvent: (type, data) => {
             if (type === 'progress') {
               setBulkResult((prev) => ({
@@ -223,15 +228,27 @@ export default function ManagePlatformClient({ platforms }) {
                 }
               }));
             }
+          },
+          onChunkDone: (done) => {
+            setBulkResult((prev) => ({
+              ...(prev || {}),
+              currentPlatformBase: {
+                processed: (prev?.currentPlatformBase?.processed || 0) + (done.processed || 0),
+                inserted: (prev?.currentPlatformBase?.inserted || 0) + (done.inserted || 0),
+                updated: (prev?.currentPlatformBase?.updated || 0) + (done.updated || 0)
+              },
+              currentChunk: null
+            }));
           }
         });
 
         setBulkResult((prev) => ({
           ...(prev || {}),
           completedPlatforms: (prev?.completedPlatforms || 0) + 1,
-          processed: (prev?.processed || 0) + (totals.processed || 0),
-          inserted: (prev?.inserted || 0) + (totals.inserted || 0),
-          updated: (prev?.updated || 0) + (totals.updated || 0),
+          processed: (prev?.processed || 0) + (prev?.currentPlatformBase?.processed || 0),
+          inserted: (prev?.inserted || 0) + (prev?.currentPlatformBase?.inserted || 0),
+          updated: (prev?.updated || 0) + (prev?.currentPlatformBase?.updated || 0),
+          currentPlatformBase: { processed: 0, inserted: 0, updated: 0 },
           currentChunk: null
         }));
       } catch (e) {
@@ -239,6 +256,7 @@ export default function ManagePlatformClient({ platforms }) {
         setBulkResult((prev) => ({
           ...(prev || {}),
           completedPlatforms: (prev?.completedPlatforms || 0) + 1,
+          currentPlatformBase: { processed: 0, inserted: 0, updated: 0 },
           currentChunk: null,
           errors: [...(prev?.errors || []), { platform: formatName(p), message }]
         }));
