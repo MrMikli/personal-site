@@ -101,6 +101,7 @@ export async function POST(request, { params }) {
 
   const body = await request.json().catch(() => ({}));
   const rawTargets = body.platformTargets || {};
+  const rawWesternRequired = body.westernRequired;
 
   const heat = await prisma.heat.findUnique({
     where: { id: heatId },
@@ -136,7 +137,12 @@ export async function POST(request, { params }) {
 
   const existingRolls = await prisma.heatRoll.findMany({
     where: { heatSignupId: signup.id },
-    select: { id: true, platformId: true, gameId: true }
+    select: {
+      id: true,
+      platformId: true,
+      gameId: true,
+      game: { select: { hasWesternRelease: true } }
+    }
   });
 
   const totalExisting = existingRolls.length;
@@ -145,16 +151,26 @@ export async function POST(request, { params }) {
   }
 
   let targets = signup.platformTargets || null;
+  let westernRequired = signup.westernRequired ?? 0;
 
   if (!targets) {
     if (!existingRolls.length) {
       // First roll: lock targets based on client configuration (normalized)
       targets = normalizeTargets(heat.platforms, heat.defaultGameCounter, rawTargets);
 
+      let requestedWestern = Number(rawWesternRequired);
+      if (!Number.isFinite(requestedWestern) || requestedWestern < 0) {
+        requestedWestern = 0;
+      }
+      if (requestedWestern > heat.defaultGameCounter) {
+        requestedWestern = heat.defaultGameCounter;
+      }
+
       signup = await prisma.heatSignup.update({
         where: { id: signup.id },
-        data: { platformTargets: targets }
+        data: { platformTargets: targets, westernRequired: requestedWestern }
       });
+      westernRequired = requestedWestern;
     } else {
       // Fallback for legacy data without targets but with existing rolls
       targets = normalizeTargets(heat.platforms, heat.defaultGameCounter, {});
@@ -168,6 +184,15 @@ export async function POST(request, { params }) {
     return acc;
   }, {});
 
+  // Western-release requirement tracking
+  const existingWestern = existingRolls.reduce(
+    (acc, roll) => (roll.game?.hasWesternRelease ? acc + 1 : acc),
+    0
+  );
+  const rollsLeft = heat.defaultGameCounter - totalExisting;
+  const neededWestern = Math.max(0, westernRequired - existingWestern);
+  const mustBeWestern = neededWestern > 0 && neededWestern >= rollsLeft;
+
   const chosenPlatformId = pickPlatformIdByRemaining(targets, existingCounts);
   if (!chosenPlatformId) {
     return NextResponse.json({ message: "No remaining rolls available for configured platform targets" }, { status: 400 });
@@ -177,7 +202,8 @@ export async function POST(request, { params }) {
 
   const where = {
     platforms: { some: { id: chosenPlatformId } },
-    ...(existingGameIds.length ? { id: { notIn: existingGameIds } } : {})
+    ...(existingGameIds.length ? { id: { notIn: existingGameIds } } : {}),
+    ...(mustBeWestern ? { hasWesternRelease: true } : {})
   };
 
   // Fetch all eligible game IDs for this platform (excluding already rolled),

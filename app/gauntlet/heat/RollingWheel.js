@@ -13,9 +13,12 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
   if (!games || games.length === 0) return null;
 
   // Duplicate games so we can scroll further and land on the chosen one in the middle.
-  // Use the last copy as the target region so the animation always moves leftwards.
-  const stripGames = [...games, ...games, ...games];
-  const baseOffset = games.length * 2; // target in last copy to keep endX <= 0
+  // Use a middle copy as the target region so there are always cards on both
+  // sides of the chosen game, avoiding an empty tail when the last game is picked.
+  const COPIES = 5;
+  const TARGET_COPY_INDEX = 2; // middle copy (0-based)
+  const stripGames = Array(COPIES).fill(games).flat();
+  const baseOffset = games.length * TARGET_COPY_INDEX; // keep endX <= 0
   const targetIndex = baseOffset + (chosenIndex ?? 0);
 
   const step = CARD_WIDTH + SLOT_GAP; // card width plus gap
@@ -55,7 +58,7 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
     >
       {/* Center selector line */}
       {!finished && (
-        <div
+        <div id ="selector-line"
           style={{
             position: "absolute",
             top: 4,

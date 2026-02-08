@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import GameCard from "@/app/components/GameCard";
 import RollingWheel from "./RollingWheel";
 
@@ -24,6 +24,7 @@ export default function HeatRollClient({
   initialRolls,
   initialTargets,
   initialSelectedGameId,
+  initialWesternRequired = 0,
   isHeatOver = false,
   isAdmin = false
 }) {
@@ -37,6 +38,11 @@ export default function HeatRollClient({
   const [selectedRollId, setSelectedRollId] = useState(null);
   const [finalSelectedGameId, setFinalSelectedGameId] = useState(
     initialSelectedGameId || null
+  );
+  const [westernRequired, setWesternRequired] = useState(
+    typeof initialWesternRequired === "number" && initialWesternRequired > 0
+      ? Math.min(initialWesternRequired, defaultGameCounter)
+      : defaultGameCounter
   );
 
   const [isLocked, setIsLocked] = useState(
@@ -60,26 +66,63 @@ export default function HeatRollClient({
 
   const [wheel, setWheel] = useState(null);
   const [pendingRoll, setPendingRoll] = useState(null);
+  const audioRef = useRef(null);
+  const fadeTimeoutRef = useRef(null);
+  const fadeIntervalRef = useRef(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(0.5);
+  const rollingRef = useRef(false);
 
-  const rollsUsedLabel = `${rolls.length} / ${defaultGameCounter} rolled`;
+  const effectiveRollCount = rolls.length + (pendingRoll ? 1 : 0);
+  const rollsUsedLabel = `${effectiveRollCount} / ${defaultGameCounter} rolled`;
 
   async function handleRoll() {
-    if (isRolling || isHeatOver) return;
-    if (rolls.length >= defaultGameCounter) return;
+    if (rollingRef.current || isRolling || isHeatOver) return;
+    if (effectiveRollCount >= defaultGameCounter) return;
     if (configMismatch) {
       setError(
         `Configured total (${totalConfigured}) must equal the heat pool (${defaultGameCounter}) before rolling.`
       );
       return;
     }
+    rollingRef.current = true;
     setIsRolling(true);
     setError("");
+    // Cancel any in-progress fade-out when starting a new roll
+    if (fadeTimeoutRef.current) {
+      clearTimeout(fadeTimeoutRef.current);
+      fadeTimeoutRef.current = null;
+    }
+    if (fadeIntervalRef.current) {
+      clearInterval(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
+    }
+    try {
+      // Start CS:GO case opening sound when rolling begins
+      if (!isMuted && volume > 0) {
+        if (!audioRef.current) {
+          const audio = new Audio(
+            "/CS_GO%20Case%20Knife%20Opening%20Sound%20Effect.mp3"
+          );
+          audio.loop = true;
+          audio.volume = volume;
+          audioRef.current = audio;
+        }
+        const audio = audioRef.current;
+        audio.currentTime = 0;
+        audio.volume = volume;
+        // Fire and forget; button click counts as user interaction in browsers.
+        audio.play().catch(() => {});
+      }
+    } catch (_e) {
+      // ignore audio errors
+    }
     let hasWheel = false;
     try {
       const res = await fetch(`/api/gauntlet/heats/${heatId}/roll`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platformTargets })
+        body: JSON.stringify({ platformTargets, westernRequired })
       });
       const json = await res.json();
       if (!res.ok) {
@@ -99,10 +142,41 @@ export default function HeatRollClient({
       }
     } catch (e) {
       setError(String(e.message || e));
+      // On error, stop any playing audio immediately so it doesn't loop
+      if (audioRef.current) {
+        try {
+          if (fadeTimeoutRef.current) {
+            clearTimeout(fadeTimeoutRef.current);
+            fadeTimeoutRef.current = null;
+          }
+          if (fadeIntervalRef.current) {
+            clearInterval(fadeIntervalRef.current);
+            fadeIntervalRef.current = null;
+          }
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        } catch (_e) {}
+      }
     } finally {
       // If no wheel animation is running, clear rolling state immediately
       if (!hasWheel) {
         setIsRolling(false);
+        rollingRef.current = false;
+        // Also stop audio in this path since there is no animation
+        if (audioRef.current) {
+          try {
+            if (fadeTimeoutRef.current) {
+              clearTimeout(fadeTimeoutRef.current);
+              fadeTimeoutRef.current = null;
+            }
+            if (fadeIntervalRef.current) {
+              clearInterval(fadeIntervalRef.current);
+              fadeIntervalRef.current = null;
+            }
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+          } catch (_e) {}
+        }
       }
     }
   }
@@ -112,7 +186,79 @@ export default function HeatRollClient({
       setRolls((prev) => [...prev, pendingRoll]);
       setPendingRoll(null);
     }
+    // After the wheel stops, let the sound play for 1s more,
+    // then fade it out over 0.5s instead of cutting abruptly.
+    if (audioRef.current && !isMuted) {
+      const audio = audioRef.current;
+      const startVolume = audio.volume ?? 1;
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current);
+      }
+      if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+      }
+      fadeTimeoutRef.current = setTimeout(() => {
+        const durationMs = 500;
+        const steps = 10;
+        const stepDuration = durationMs / steps;
+        let currentStep = 0;
+        fadeIntervalRef.current = setInterval(() => {
+          currentStep += 1;
+          const ratio = Math.max(0, 1 - currentStep / steps);
+          try {
+            audio.volume = startVolume * ratio;
+          } catch (_e) {
+            // ignore volume errors
+          }
+          if (currentStep >= steps) {
+            clearInterval(fadeIntervalRef.current);
+            fadeIntervalRef.current = null;
+            try {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.volume = startVolume;
+            } catch (_e) {}
+          }
+        }, stepDuration);
+      }, 1000);
+    }
     setIsRolling(false);
+    rollingRef.current = false;
+  }
+
+  function handleVolumeBarClick(event) {
+    if (!event.currentTarget) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const relativeX = event.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, relativeX / rect.width));
+    setVolume(ratio);
+    const shouldMute = ratio === 0;
+    setIsMuted(shouldMute);
+    if (audioRef.current) {
+      try {
+        audioRef.current.volume = ratio;
+        if (shouldMute) {
+          audioRef.current.pause();
+        } else if (isRolling) {
+          audioRef.current.play().catch(() => {});
+        }
+      } catch (_e) {}
+    }
+  }
+
+  function handleToggleMute() {
+    setIsMuted((prev) => {
+      const next = !prev;
+      if (audioRef.current) {
+        if (next) {
+          audioRef.current.pause();
+        } else if (isRolling) {
+          audioRef.current.volume = volume;
+          audioRef.current.play().catch(() => {});
+        }
+      }
+      return next;
+    });
   }
 
   function handleTargetChange(platformId, rawValue) {
@@ -121,6 +267,14 @@ export default function HeatRollClient({
     if (value < 1) value = 1;
     if (value > maxPerPlatform) value = maxPerPlatform;
     setPlatformTargets((prev) => ({ ...prev, [platformId]: value }));
+  }
+
+  function handleWesternRequiredChange(rawValue) {
+    if (isLocked || isHeatOver) return;
+    let value = Number(rawValue);
+    if (!Number.isFinite(value) || value < 0) value = 0;
+    if (value > defaultGameCounter) value = defaultGameCounter;
+    setWesternRequired(value);
   }
 
   async function handleTechnicalVeto(rollId) {
@@ -234,6 +388,9 @@ export default function HeatRollClient({
       setSelectedRollId(null);
       setWheel(null);
       setPendingRoll(null);
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
     } catch (e) {
       setError(String(e.message || e));
     }
@@ -262,14 +419,16 @@ export default function HeatRollClient({
             width: "fit-content"
           }}
         >
+          <h2 style={{ margin: 0, fontSize: 16, color: "#333" }}>Configuration</h2>
           <div style={{ fontSize: 13, color: "#444" }}>
-              <><div style={{ color: "#ff0000" }}>Caution:</div><div>Once you roll, your platform configuration for this heat is locked.</div> <br /><div>Choose how many rolls to aim for on each platform (min 1 each).</div></>
+              <><div style={{ color: "#ff0000" }}>Caution:</div><div>Once you roll, your configuration for this heat is locked.</div> <br /><div>Choose how many rolls to aim for on each platform (min 1 each).</div></>
           </div>
           <div
             style={{
               display: "flex",
               flexWrap: "wrap",
-              gap: 12
+              gap: 12,
+              flexDirection: "column",
             }}
           >
             {(platforms || []).map((p) => (
@@ -279,7 +438,7 @@ export default function HeatRollClient({
               >
                 <span>
                   {p.name}
-                  {p.abbreviation ? ` (${p.abbreviation})` : ""}
+                  {p.abbreviation ? ` (${p.abbreviation})` : ""}:
                 </span>
                 {isLocked ? (
                   <span>{platformTargets[p.id] ?? 0}</span>
@@ -306,6 +465,29 @@ export default function HeatRollClient({
               )}
             </div>
           )}
+
+          <div style={{ fontSize: 13, color: "#333", marginTop: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span>Minimum western-release games:</span>
+              {isLocked ? (
+                <span>{westernRequired}</span>
+              ) : (
+                <input
+                  type="number"
+                  min={0}
+                  max={defaultGameCounter}
+                  value={westernRequired}
+                  disabled={isHeatOver}
+                  onChange={(e) => handleWesternRequiredChange(e.target.value)}
+                  style={{ width: 72 }}
+                />
+              )}
+            </label>
+            <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+              At least this many of your rolled games will be guaranteed to have a Western-region release (EU, NA, AU, WW). <br /> 
+              Reminder: You are always allowed to do a technical veto any game that can't be acquired in English, this just makes rolling faster if you're certain you don't want to deal with any moonrunes at all. 
+            </div>
+          </div>
         </div>
 
         {isAdmin && !isHeatOver && (
@@ -366,11 +548,97 @@ export default function HeatRollClient({
         }}
       >
         <div style={{ textAlign: "center", maxWidth: 480 }}>
-          <p style={{ color: "#666", marginBottom: 12 }}>
+          <p style={{ color: "#666", marginBottom: 8 }}>
             {isHeatOver
               ? "This heat is over. You can review your pool, but cannot roll again."
-              : "Press roll to draw a game."}
+              : ""}
           </p>
+          {!isHeatOver && (
+            <div
+              style={{
+                marginTop: 4,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleToggleMute}
+                aria-label={isMuted ? "Unmute sound" : "Mute sound"}
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: "999px",
+                  border: "1px solid #d1d5db",
+                  background: "#f9fafb",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  padding: 0
+                }}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M3 9v6h4l5 4V5L7 9H3z"
+                    fill={isMuted ? "#9ca3af" : "#374151"}
+                  />
+                  {isMuted && (
+                    <>
+                      <line
+                        x1="16"
+                        y1="8"
+                        x2="21"
+                        y2="16"
+                        stroke="#b91c1c"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                      <line
+                        x1="21"
+                        y1="8"
+                        x2="16"
+                        y2="16"
+                        stroke="#b91c1c"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </>
+                  )}
+                </svg>
+              </button>
+              <div
+                aria-hidden="true"
+                style={{
+                  position: "relative",
+                  width: 80,
+                  height: 6,
+                  borderRadius: 999,
+                  background: "#e5e7eb",
+                  overflow: "hidden"
+                }}
+                onClick={handleVolumeBarClick}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: isMuted ? "0%" : `${Math.round(volume * 100)}%`,
+                    background: "#4b5563",
+                    transition: "width 150ms ease-out, background-color 150ms ease-out"
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {wheel && (
@@ -427,7 +695,9 @@ export default function HeatRollClient({
           <h3 style={{ margin: 0 }}>Pool</h3>
           <span style={{ fontSize: 13, color: "#666" }}>{rollsUsedLabel}</span>
         </div>
-
+        <div style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>
+            Tip: Click on a game in the pool to visit the Backloggd page for that game.
+        </div>
         {rolls.length === 0 ? (
           <p style={{ color: "#666", fontStyle: "italic" }}>
             No games in the pool yet. Once you roll, they will appear here.

@@ -6,6 +6,7 @@ import {
   buildGameQuery,
   pickEarliestRelease,
   toCoverBigUrl,
+  hasWesternRelease,
 } from '@/lib/igdbGames';
 
 export async function GET(req, { params }) {
@@ -86,6 +87,7 @@ export async function GET(req, { params }) {
           for (const g of games) {
             const earliest = pickEarliestRelease(g.release_dates);
             const coverUrl = toCoverBigUrl(g.cover);
+            const western = hasWesternRelease(g.release_dates);
 
             const existing = await prisma.game.findUnique({
               where: { igdbId: g.id },
@@ -101,6 +103,7 @@ export async function GET(req, { params }) {
                   coverUrl,
                   releaseDateUnix: earliest?.unix ?? null,
                   releaseDateHuman: earliest?.human ?? null,
+                  hasWesternRelease: western,
                   platforms: { connect: { igdbId: platformIgdbId } }
                 }
               });
@@ -113,7 +116,8 @@ export async function GET(req, { params }) {
                   slug: g.slug ?? null,
                   coverUrl,
                   releaseDateUnix: earliest?.unix ?? null,
-                  releaseDateHuman: earliest?.human ?? null
+                  releaseDateHuman: earliest?.human ?? null,
+                  hasWesternRelease: western
                 }
               });
               const alreadyLinked = existing.platforms.some(p => p.igdbId === platformIgdbId);

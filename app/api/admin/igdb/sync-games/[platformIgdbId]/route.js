@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { igdbRequest } from '@/lib/igdb';
-import { buildGameQuery, pickEarliestRelease, toCoverBigUrl } from '@/lib/igdbGames';
+import { buildGameQuery, pickEarliestRelease, toCoverBigUrl, hasWesternRelease } from '@/lib/igdbGames';
 
 export async function POST(_req, { params }) {
   const session = await getSession();
@@ -32,6 +32,7 @@ export async function POST(_req, { params }) {
       for (const g of games) {
         const earliest = pickEarliestRelease(g.release_dates);
         const coverUrl = toCoverBigUrl(g.cover);
+        const western = hasWesternRelease(g.release_dates);
 
         const existing = await prisma.game.findUnique({
           where: { igdbId: g.id },
@@ -47,6 +48,7 @@ export async function POST(_req, { params }) {
               coverUrl,
               releaseDateUnix: earliest?.unix ?? null,
               releaseDateHuman: earliest?.human ?? null,
+              hasWesternRelease: western,
               platforms: { connect: { igdbId: platformIgdbId } },
             },
           });
@@ -60,6 +62,7 @@ export async function POST(_req, { params }) {
               coverUrl,
               releaseDateUnix: earliest?.unix ?? null,
               releaseDateHuman: earliest?.human ?? null,
+              hasWesternRelease: western,
             },
           });
           // Connect platform only if not already linked to avoid duplicate relation errors

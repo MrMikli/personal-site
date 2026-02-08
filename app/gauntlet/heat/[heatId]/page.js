@@ -55,6 +55,7 @@ export default async function HeatGameSelectionPage({ params }) {
   const initialRolls = signup?.rolls || [];
   const initialTargets = signup?.platformTargets || null;
   const initialSelectedGameId = signup?.selectedGameId || null;
+  const initialWesternRequired = signup?.westernRequired ?? 0;
 
   const now = new Date();
   const endsAt = heat.endsAt ? new Date(heat.endsAt) : null;
@@ -89,6 +90,7 @@ export default async function HeatGameSelectionPage({ params }) {
         initialRolls={initialRolls}
         initialTargets={initialTargets}
         initialSelectedGameId={initialSelectedGameId}
+        initialWesternRequired={initialWesternRequired}
         isHeatOver={isHeatOver}
         isAdmin={!!session.user.isAdmin}
       />

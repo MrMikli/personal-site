@@ -74,7 +74,7 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
         background: "#fafafa"
       }}
     >
-      {backlogUrl ? (
+      {backlogUrl && variant === "pool" ? (
         <Link href={backlogUrl} target="_blank" rel="noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
