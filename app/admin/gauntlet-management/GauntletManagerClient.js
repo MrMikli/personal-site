@@ -22,6 +22,13 @@ export default function GauntletManagerClient() {
     ? Math.max(...heats.map((h) => Number(h.order) || 0)) + 1
     : 1;
 
+  function toDateInputValue(value) {
+    if (!value) return "";
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return "";
+    return dt.toISOString().slice(0, 10);
+  }
+
   async function loadGauntlets() {
     setError("");
     const res = await fetch("/api/admin/gauntlets");
@@ -42,7 +49,13 @@ export default function GauntletManagerClient() {
       setError(json?.message || "Failed to load heats");
       return;
     }
-    setHeats(json.heats || []);
+    setHeats(
+      (json.heats || []).map((h) => ({
+        ...h,
+        startsAt: toDateInputValue(h.startsAt),
+        endsAt: toDateInputValue(h.endsAt)
+      }))
+    );
   }
 
   async function loadPlatforms() {

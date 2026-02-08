@@ -30,6 +30,17 @@ function normalizeTargets(heatPlatforms, defaultGameCounter, rawTargets) {
 
   let total = scaled.reduce((acc, v) => acc + v, 0);
 
+  // If the requested total is smaller than the number of platforms, we can't keep each >= 1.
+  // In that case, allocate 1 to the highest-weight platforms and 0 to the rest.
+  if (defaultGameCounter < heatPlatforms.length) {
+    const ranked = heatPlatforms
+      .map((p, idx) => ({ platformId: p.id, idx, weight: baseValues[idx] }))
+      .sort((a, b) => (b.weight - a.weight) || String(a.platformId).localeCompare(String(b.platformId)));
+    const keep = new Set(ranked.slice(0, Math.max(0, defaultGameCounter)).map((r) => r.idx));
+    scaled = scaled.map((_v, idx) => (keep.has(idx) ? 1 : 0));
+    total = scaled.reduce((acc, v) => acc + v, 0);
+  }
+
   // Adjust totals to exactly defaultGameCounter while keeping each >= 1
   while (total !== defaultGameCounter) {
     for (let i = 0; i < scaled.length && total !== defaultGameCounter; i++) {
@@ -37,10 +48,20 @@ function normalizeTargets(heatPlatforms, defaultGameCounter, rawTargets) {
         scaled[i] -= 1;
         total -= 1;
       } else if (total < defaultGameCounter) {
-        scaled[i] += 1;
-        total += 1;
+        // If defaultGameCounter < platform count we allow 0s; otherwise keep each >= 1
+        if (defaultGameCounter < heatPlatforms.length) {
+          scaled[i] += 1;
+          total += 1;
+        } else {
+          scaled[i] += 1;
+          total += 1;
+        }
       }
     }
+
+    // Safety valve to avoid infinite loops in weird configurations
+    if (scaled.length === 0) break;
+    if (total > defaultGameCounter && scaled.every((v) => v <= 1)) break;
   }
 
   const result = {};
@@ -200,42 +221,128 @@ export async function POST(request, { params }) {
 
   const existingGameIds = existingRolls.map((r) => r.gameId);
 
-  const where = {
-    platforms: { some: { id: chosenPlatformId } },
+  // Build a mixed wheel across all platforms that still have remaining target counts,
+  // but force the chosen game to come from the platform selected by remaining-quota logic.
+  const remainingByPlatformId = Object.entries(targets).reduce((acc, [platformId, target]) => {
+    const used = existingCounts[platformId] || 0;
+    const rem = Math.max(0, Number(target) - used);
+    if (rem > 0) acc[platformId] = rem;
+    return acc;
+  }, {});
+
+  const platformIdsWithRemaining = Object.keys(remainingByPlatformId);
+  if (!platformIdsWithRemaining.length) {
+    return NextResponse.json({ message: "No remaining rolls available for configured platform targets" }, { status: 400 });
+  }
+
+  const baseWhere = {
     ...(existingGameIds.length ? { id: { notIn: existingGameIds } } : {}),
     ...(mustBeWestern ? { hasWesternRelease: true } : {})
   };
 
-  // Fetch all eligible game IDs for this platform (excluding already rolled),
-  // then sample up to 30 uniformly at random for the wheel.
-  const eligibleIds = await prisma.game.findMany({
-    where,
-    select: { id: true }
-  });
+  const eligibleIdsByPlatformId = {};
+  for (const platformId of platformIdsWithRemaining) {
+    const ids = await prisma.game.findMany({
+      where: {
+        ...baseWhere,
+        platforms: { some: { id: platformId } }
+      },
+      select: { id: true }
+    });
+    eligibleIdsByPlatformId[platformId] = shuffleInPlace(ids.map((g) => g.id));
+  }
 
-  const totalGames = eligibleIds.length;
-  if (totalGames === 0) {
+  const eligibleChosen = eligibleIdsByPlatformId[chosenPlatformId] || [];
+  if (!eligibleChosen.length) {
     return NextResponse.json({ message: "No eligible games available for this platform" }, { status: 400 });
   }
 
-  const take = Math.min(30, totalGames);
-  const shuffledIds = shuffleInPlace([...eligibleIds]);
-  const sampleIds = shuffledIds.slice(0, take).map((g) => g.id);
+  // Determine a wheel size based on available unique game IDs across remaining platforms.
+  const union = new Set();
+  for (const pid of platformIdsWithRemaining) {
+    for (const id of eligibleIdsByPlatformId[pid] || []) union.add(id);
+  }
+  const take = Math.min(30, union.size);
+  if (take <= 0) {
+    return NextResponse.json({ message: "No eligible games available for configured platform targets" }, { status: 400 });
+  }
 
-  let wheelGames = await prisma.game.findMany({
-    where: { id: { in: sampleIds } },
+  const usedInWheel = new Set();
+  const wheelSlots = [];
+
+  // Ensure the wheel has a visible mix by seeding some slots from the chosen platform.
+  const seedFromChosen = Math.min(Math.max(1, Math.ceil(take / 2)), eligibleChosen.length, take);
+  while (wheelSlots.length < seedFromChosen && eligibleIdsByPlatformId[chosenPlatformId].length) {
+    const gameId = eligibleIdsByPlatformId[chosenPlatformId].pop();
+    if (!gameId || usedInWheel.has(gameId)) continue;
+    usedInWheel.add(gameId);
+    wheelSlots.push({ gameId, platformId: chosenPlatformId });
+  }
+
+  function pickPlatformForWheel() {
+    const entries = platformIdsWithRemaining
+      .map((pid) => ({ pid, remaining: remainingByPlatformId[pid] || 0 }))
+      .filter((e) => e.remaining > 0 && (eligibleIdsByPlatformId[e.pid] || []).length > 0);
+
+    if (!entries.length) return null;
+    const total = entries.reduce((acc, e) => acc + e.remaining, 0);
+    let r = Math.floor(Math.random() * total) + 1;
+    for (const e of entries) {
+      if (r <= e.remaining) return e.pid;
+      r -= e.remaining;
+    }
+    return entries[0].pid;
+  }
+
+  while (wheelSlots.length < take) {
+    const pid = pickPlatformForWheel();
+    if (!pid) break;
+    const list = eligibleIdsByPlatformId[pid] || [];
+    let gameId = null;
+    while (list.length) {
+      const candidate = list.pop();
+      if (!candidate || usedInWheel.has(candidate)) continue;
+      gameId = candidate;
+      break;
+    }
+    if (!gameId) {
+      remainingByPlatformId[pid] = 0;
+      continue;
+    }
+    usedInWheel.add(gameId);
+    wheelSlots.push({ gameId, platformId: pid });
+    remainingByPlatformId[pid] = Math.max(0, (remainingByPlatformId[pid] || 0) - 1);
+  }
+
+  // Fetch full game objects, then preserve wheel slot order.
+  const wheelIds = wheelSlots.map((s) => s.gameId);
+  const games = await prisma.game.findMany({
+    where: { id: { in: wheelIds } },
     include: {
       platforms: { select: { id: true, name: true, abbreviation: true } }
     }
   });
 
+  const gameById = new Map(games.map((g) => [g.id, g]));
+  let wheelGames = wheelSlots.map((s) => gameById.get(s.gameId)).filter(Boolean);
+
   if (!wheelGames.length) {
-    return NextResponse.json({ message: "No eligible games available for this platform" }, { status: 400 });
+    return NextResponse.json({ message: "No eligible games available for configured platform targets" }, { status: 400 });
   }
 
-  // Shuffle the wheel for visual randomness and pick the winner uniformly
-  wheelGames = shuffleInPlace(wheelGames);
-  const chosenIndex = Math.floor(Math.random() * wheelGames.length);
+  // Shuffle visual order, but keep platform mapping aligned.
+  const shuffled = wheelGames.map((g, idx) => ({ g, platformId: wheelSlots[idx].platformId }));
+  shuffleInPlace(shuffled);
+  wheelGames = shuffled.map((x) => x.g);
+
+  // Force the chosen index to land on a slot from chosenPlatformId.
+  const chosenIndices = shuffled
+    .map((x, idx) => (x.platformId === chosenPlatformId ? idx : -1))
+    .filter((idx) => idx >= 0);
+  const chosenIndex = chosenIndices.length
+    ? chosenIndices[Math.floor(Math.random() * chosenIndices.length)]
+    : Math.floor(Math.random() * wheelGames.length);
+
   const chosenGame = wheelGames[chosenIndex];
 
   const newOrder = totalExisting + 1;

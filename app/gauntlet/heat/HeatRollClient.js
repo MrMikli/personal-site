@@ -120,11 +120,10 @@ export default function HeatRollClient({
         const audio = audioRef.current;
         audio.currentTime = 0;
         audio.volume = volume;
-        // Fire and forget; button click counts as user interaction in browsers.
         audio.play().catch(() => {});
       }
     } catch (_e) {
-      // ignore audio errors
+      //
     }
     let hasWheel = false;
     try {
@@ -151,7 +150,7 @@ export default function HeatRollClient({
       }
     } catch (e) {
       setError(String(e.message || e));
-      // On error, stop any playing audio immediately so it doesn't loop
+      // On error, stop any playing audio immediately to stop infinite loops
       if (audioRef.current) {
         try {
           if (fadeTimeoutRef.current) {

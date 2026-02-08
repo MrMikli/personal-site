@@ -250,7 +250,12 @@ export default function GauntletClient({ current, upcoming, previous }) {
                                 <select
                                   value={currentStatus}
                                   onChange={(e) => handleStatusChange(h.id, e.target.value)}
-                                  disabled={isHeatOver || isHeatNotOpenYet || isLockedByPreviousHeat}
+                                  disabled={
+                                    isHeatOver ||
+                                    isHeatNotOpenYet ||
+                                    isLockedByPreviousHeat ||
+                                    !game
+                                  }
                                   className={styles.select}
                                 >
                                   {STATUS_OPTIONS.map((opt) => (

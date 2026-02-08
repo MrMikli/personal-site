@@ -4,6 +4,14 @@ import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+function parseDateOnly(value) {
+  if (typeof value !== "string") return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt;
+}
+
 export async function PATCH(request, { params }) {
   const session = await getSession();
   if (!session?.user?.isAdmin) {
@@ -20,8 +28,26 @@ export async function PATCH(request, { params }) {
   const data = {};
   if (body.name !== undefined) data.name = body.name || null;
   if (body.order !== undefined) data.order = Number(body.order) || 1;
-  if (body.startsAt !== undefined) data.startsAt = body.startsAt ? new Date(body.startsAt) : null;
-  if (body.endsAt !== undefined) data.endsAt = body.endsAt ? new Date(body.endsAt) : null;
+  if (body.startsAt !== undefined) {
+    if (!body.startsAt) {
+      return NextResponse.json({ message: "startsAt is required" }, { status: 400 });
+    }
+    const dt = parseDateOnly(body.startsAt);
+    if (!dt) {
+      return NextResponse.json({ message: "startsAt must be a valid date" }, { status: 400 });
+    }
+    data.startsAt = dt;
+  }
+  if (body.endsAt !== undefined) {
+    if (!body.endsAt) {
+      return NextResponse.json({ message: "endsAt is required" }, { status: 400 });
+    }
+    const dt = parseDateOnly(body.endsAt);
+    if (!dt) {
+      return NextResponse.json({ message: "endsAt must be a valid date" }, { status: 400 });
+    }
+    data.endsAt = dt;
+  }
   if (body.defaultGameCounter !== undefined) {
     const gameCount = Number(body.defaultGameCounter);
     if (!Number.isFinite(gameCount) || gameCount < 1) {
@@ -38,14 +64,20 @@ export async function PATCH(request, { params }) {
   }
 
   try {
-    const updated = await prisma.heat.updateMany({
+    const existing = await prisma.heat.findFirst({
       where: { id: heatId, gauntletId },
-      data
+      select: { id: true }
     });
-    if (updated.count === 0) {
+    if (!existing) {
       return NextResponse.json({ message: "Heat not found" }, { status: 404 });
     }
-    return NextResponse.json({ updated: updated.count });
+
+    await prisma.heat.update({
+      where: { id: heatId },
+      data
+    });
+
+    return NextResponse.json({ updated: 1 });
   } catch (e) {
     return NextResponse.json({ message: "Failed to update heat" }, { status: 500 });
   }

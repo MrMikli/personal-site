@@ -38,6 +38,15 @@ export async function POST(request, { params }) {
     }
   });
 
+  // You can't meaningfully mark a heat as beaten/given up until you've picked a game.
+  // Allow UNBEATEN (default) without a selected game.
+  if (status !== "UNBEATEN") {
+    const selectedGameId = signup?.selectedGameId ?? null;
+    if (!selectedGameId) {
+      return NextResponse.json({ message: "Pick a game before setting a status" }, { status: 400 });
+    }
+  }
+
   if (!signup) {
     signup = await prisma.heatSignup.create({
       data: {
