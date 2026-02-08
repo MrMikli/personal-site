@@ -267,8 +267,7 @@ export default function RollSimulatorClient({ platforms }) {
             </label>
             <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
               Western-region means EU, NA, AU, or Worldwide release flags from
-              IGDB. This is just a filter for the simulator and does not affect
-              any real heat.
+              IGDB.
             </div>
           </div>
         </div>

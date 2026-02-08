@@ -25,7 +25,7 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
     : null;
 
   const platformsLabel = (game.platforms || [])
-    .map((p) => (p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name))
+    .map((p) => (p.abbreviation ? p.abbreviation : p.name))
     .join(", ");
 
   const isWheel = variant === "wheel";
@@ -45,7 +45,7 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto }) {
     e.stopPropagation();
     if (!onTechnicalVeto) return;
     const confirmed = window.confirm(
-      "Mark this game as a technical veto? You are confirming that you cannot reasonably get access to or play this game. It will be removed from your pool for this heat."
+      "Mark this game as a technical veto? You are confirming that you cannot reasonably get access to or play this game, or that it's not a game at all. It will be removed from your pool for this heat."
     );
     if (!confirmed) {
       setMenuOpen(false);

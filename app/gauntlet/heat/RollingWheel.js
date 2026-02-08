@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import GameCard from "@/app/components/GameCard";
 
 // Visual layout configuration
@@ -85,6 +86,30 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
       >
         {stripGames.map((game, idx) => {
           const isSelected = finished && idx === targetIndex;
+          const backlogSlug = game?.slug || "";
+          const backlogUrl = backlogSlug
+            ? `https://backloggd.com/games/${backlogSlug}/`
+            : null;
+
+          const cardInner = (
+            <div
+              style={{
+                display: "inline-block",
+                ...(isSelected
+                  ? {
+                      borderRadius: 10,
+                      padding: 3,
+                      boxShadow: "0 0 18px rgba(255, 215, 0, 0.85)",
+                      border: "2px solid #facc15",
+                      background: "rgba(0,0,0,0.4)"
+                    }
+                  : {})
+              }}
+            >
+              <GameCard game={game} variant="wheel" />
+            </div>
+          );
+
           return (
             <div
               key={`${game.id}-${idx}`}
@@ -102,19 +127,24 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
             >
               <div
                 style={{
-                  display: "inline-block",
-                  ...(isSelected
-                    ? {
-                        borderRadius: 10,
-                        padding: 3,
-                        boxShadow: "0 0 18px rgba(255, 215, 0, 0.85)",
-                        border: "2px solid #facc15",
-                        background: "rgba(0,0,0,0.4)"
-                      }
-                    : {})
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 4
                 }}
               >
-                <GameCard game={game} variant="wheel" />
+                {isSelected && backlogUrl ? (
+                  <Link
+                    href={backlogUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ textDecoration: "none" }}
+                  >
+                    {cardInner}
+                  </Link>
+                ) : (
+                  cardInner
+                )}
               </div>
             </div>
           );
