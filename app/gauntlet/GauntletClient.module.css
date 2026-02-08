@@ -58,6 +58,15 @@
   margin-bottom: 10px;
 }
 
+.winnerLine {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid #bfe9bf;
+  background: #f3fff3;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
 .mutedItalic {
   color: #777;
   font-style: italic;

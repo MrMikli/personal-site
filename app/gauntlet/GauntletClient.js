@@ -148,6 +148,19 @@ export default function GauntletClient({ current, upcoming, previous }) {
                 <Link href={`/gauntlet/scoreboard/${selectedGauntlet.id}`}>
                   View scoreboard →
                 </Link>
+                {selectedGauntlet.winner && selectedGauntlet.winner.usernames && (
+                  <div className={styles.winnerLine}>
+                    <strong>
+                      {selectedGauntlet.winner.usernames.length === 1 ? "Winner" : "Winners"}
+                    </strong>
+                    : {selectedGauntlet.winner.usernames.join(", ")}
+                    {Number.isFinite(selectedGauntlet.winner.points) && (
+                      <>
+                        {" "}({selectedGauntlet.winner.points} pt{selectedGauntlet.winner.points === 1 ? "" : "s"})
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               {selectedGauntlet.heats.length === 0 ? (
                 <p className={styles.p0}>No heats configured for this gauntlet yet.</p>

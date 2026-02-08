@@ -42,6 +42,85 @@ export default async function GauntletPage() {
     }
   });
 
+  async function computeWinnerByGauntletId(gauntletIds) {
+    const winnerById = new Map();
+    if (!gauntletIds || gauntletIds.length === 0) return winnerById;
+
+    const endedGauntlets = await prisma.gauntlet.findMany({
+      where: { id: { in: gauntletIds } },
+      select: {
+        id: true,
+        heats: { select: { id: true }, orderBy: { order: "asc" } },
+        users: { select: { id: true, username: true } }
+      }
+    });
+
+    const pointsByGauntlet = new Map();
+
+    for (const g of endedGauntlets) {
+      const byUserId = new Map();
+      for (const u of g.users || []) {
+        byUserId.set(u.id, { id: u.id, username: u.username, points: 0 });
+      }
+      pointsByGauntlet.set(g.id, byUserId);
+    }
+
+    const signups = await prisma.heatSignup.findMany({
+      where: {
+        heat: {
+          gauntletId: { in: gauntletIds }
+        }
+      },
+      select: {
+        status: true,
+        heat: { select: { gauntletId: true } },
+        user: { select: { id: true, username: true } }
+      }
+    });
+
+    for (const s of signups) {
+      const gauntletId = s.heat?.gauntletId;
+      const user = s.user;
+      if (!gauntletId || !user) continue;
+
+      if (!pointsByGauntlet.has(gauntletId)) {
+        pointsByGauntlet.set(gauntletId, new Map());
+      }
+
+      const byUserId = pointsByGauntlet.get(gauntletId);
+      if (!byUserId.has(user.id)) {
+        byUserId.set(user.id, { id: user.id, username: user.username, points: 0 });
+      }
+
+      if (s.status === "BEATEN") {
+        const row = byUserId.get(user.id);
+        row.points += 1;
+      }
+    }
+
+    for (const [gauntletId, byUserId] of pointsByGauntlet.entries()) {
+      const rows = Array.from(byUserId.values());
+      if (rows.length === 0) {
+        winnerById.set(gauntletId, null);
+        continue;
+      }
+
+      const maxPoints = rows.reduce((m, r) => (r.points > m ? r.points : m), 0);
+      const winners = rows
+        .filter((r) => r.points === maxPoints)
+        .map((r) => r.username)
+        .filter(Boolean)
+        .sort((a, b) => String(a).localeCompare(String(b)));
+
+      winnerById.set(gauntletId, {
+        usernames: winners,
+        points: maxPoints
+      });
+    }
+
+    return winnerById;
+  }
+
   function classify(g) {
     if (!g.heats.length) return "upcoming";
     const minStart = g.heats.reduce((min, h) => {
@@ -69,6 +148,17 @@ export default async function GauntletPage() {
   const current = [];
   const upcoming = [];
   const previous = [];
+
+  const bucketByGauntletId = new Map();
+  const previousIds = [];
+
+  for (const g of gauntlets) {
+    const bucket = classify(g);
+    bucketByGauntletId.set(g.id, bucket);
+    if (bucket === "previous") previousIds.push(g.id);
+  }
+
+  const winnerByGauntletId = await computeWinnerByGauntletId(previousIds);
 
   const mapHeat = (h) => {
     const signup = h.signups && h.signups[0] ? h.signups[0] : null;
@@ -112,11 +202,12 @@ export default async function GauntletPage() {
   };
 
   for (const g of gauntlets) {
-    const bucket = classify(g);
+    const bucket = bucketByGauntletId.get(g.id) || "upcoming";
     const mapped = {
       id: g.id,
       name: g.name,
-      heats: (g.heats || []).map(mapHeat)
+      heats: (g.heats || []).map(mapHeat),
+      winner: bucket === "previous" ? (winnerByGauntletId.get(g.id) ?? null) : null
     };
     if (bucket === "current") current.push(mapped);
     else if (bucket === "upcoming") upcoming.push(mapped);
