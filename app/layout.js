@@ -1,6 +1,7 @@
 import Link from "next/link";
 import "./globals.css";
 import { getSession } from "../lib/session";
+import styles from "./layout.module.css";
 
 export const metadata = {
   title: "Funny Games 1997",
@@ -17,17 +18,17 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        <header style={{ padding: "12px", borderBottom: "1px solid #eee", display: "flex", gap: 12, alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 12 }}>
+        <header className={styles.header}>
+          <div className={styles.nav}>
             <Link href="/">Home</Link>
             <Link href="/roll-simulator">Roll simulator</Link>
             {user && <Link href="/gauntlet">Retro Game Gauntlet</Link>}
             {user?.isAdmin && <Link href="/admin">Admin</Link>}
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
+          <div className={styles.userArea}>
             {user ? (
               <>
-                <span style={{ opacity: 0.7 }}>Signed in as {user.username}</span>
+                <span className={styles.signedInAs}>Signed in as {user.username}</span>
                 <form action="/api/auth/logout" method="post">
                   <button type="submit">Logout</button>
                 </form>
@@ -40,7 +41,7 @@ export default async function RootLayout({ children }) {
             )}
           </div>
         </header>
-        <main style={{ padding: 24 }}>{children}</main>
+        <main className={styles.main}>{children}</main>
       </body>
     </html>
   );

@@ -4,6 +4,7 @@ import { getSession } from "../../../lib/session";
 import { prisma } from "@/lib/prisma";
 import SeedPlatformsClient from "./SeedPlatformsClient";
 import ManagePlatformClient from "./ManagePlatformClient";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default async function AdminGameManagementPage() {
   });
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className={styles.container}>
       <h1>Game Management</h1>
       <div>
         <Link href="/admin">← Back to Admin</Link>
@@ -34,13 +35,13 @@ export default async function AdminGameManagementPage() {
 
       <section>
         <h2>Platforms</h2>
-        <p style={{ marginTop: 0 }}>Seed and sync platform catalog from IGDB.</p>
+        <p className={styles.pNoTop}>Seed and sync platform catalog from IGDB.</p>
         <SeedPlatformsClient />
       </section>
 
       <section>
         <h2>Games</h2>
-        <p style={{ marginTop: 0 }}>Select a platform to manage games.</p>
+        <p className={styles.pNoTop}>Select a platform to manage games.</p>
         <ManagePlatformClient platforms={platforms} />
       </section>
     </div>

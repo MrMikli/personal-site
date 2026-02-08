@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '../../../lib/session';
+import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,12 +28,12 @@ export default async function AdminStatusPage() {
         <p><strong>Status:</strong> Connected</p>
         <p>Users in DB: {UserCount}</p>
         <p>Platforms in DB: {PlatformCount}</p>
-        <section style={{ marginTop: 16 }}>
+        <section className={styles.section}>
           <h2>Games Per Platform</h2>
           {platformsWithGames.length === 0 ? (
             <p>No games synced yet.</p>
           ) : (
-            <ul style={{ listStyle: 'none', paddingLeft: 0, display: 'grid', gap: 6 }}>
+            <ul className={styles.platformList}>
               {platformsWithGames.map(p => (
                 <li key={`${p.name}-${p.abbreviation || ''}`}>
                   <span>

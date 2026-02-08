@@ -1,0 +1,329 @@
+.configRow {
+  margin-top: 8px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.configCard {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  background: #fafafa;
+  display: grid;
+  gap: 8px;
+  width: fit-content;
+}
+
+.configTitle {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.configHelp {
+  font-size: 13px;
+  color: #444;
+}
+
+.cautionTitle {
+  color: #ff0000;
+  font-weight: 700;
+}
+
+.targets {
+  display: grid;
+  gap: 12px;
+}
+
+.targetRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #333;
+}
+
+.targetInput {
+  width: 60px;
+}
+
+.totals {
+  font-size: 12px;
+  color: #666;
+}
+
+.totalsError {
+  color: crimson;
+  margin-top: 4px;
+}
+
+.western {
+  font-size: 13px;
+  color: #333;
+  margin-top: 8px;
+}
+
+.westernLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.westernInput {
+  width: 72px;
+}
+
+.westernHelp {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.adminBox {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px dashed #b91c1c;
+  background: #fff7f7;
+  max-width: 260px;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.adminTitle {
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.adminText {
+  color: #7f1d1d;
+}
+
+.adminButton {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #b91c1c;
+  background: white;
+  color: #b91c1c;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.error {
+  color: crimson;
+  margin-top: 8px;
+}
+
+.rollingArea {
+  margin-top: 8px;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, rgba(255,255,255,0.9), rgba(245,245,245,0.95));
+  gap: 16px;
+}
+
+.rollingTop {
+  text-align: center;
+  max-width: 480px;
+}
+
+.rollingNote {
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.volumeRow {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.muteButton {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.volumeBar {
+  position: relative;
+  width: 80px;
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.volumeFill {
+  position: absolute;
+  inset: 0;
+  background: #4b5563;
+  transition: width 150ms ease-out, background-color 150ms ease-out;
+}
+
+.volumeFill0 { width: 0%; }
+.volumeFill5 { width: 5%; }
+.volumeFill10 { width: 10%; }
+.volumeFill15 { width: 15%; }
+.volumeFill20 { width: 20%; }
+.volumeFill25 { width: 25%; }
+.volumeFill30 { width: 30%; }
+.volumeFill35 { width: 35%; }
+.volumeFill40 { width: 40%; }
+.volumeFill45 { width: 45%; }
+.volumeFill50 { width: 50%; }
+.volumeFill55 { width: 55%; }
+.volumeFill60 { width: 60%; }
+.volumeFill65 { width: 65%; }
+.volumeFill70 { width: 70%; }
+.volumeFill75 { width: 75%; }
+.volumeFill80 { width: 80%; }
+.volumeFill85 { width: 85%; }
+.volumeFill90 { width: 90%; }
+.volumeFill95 { width: 95%; }
+.volumeFill100 { width: 100%; }
+
+.rollButton {
+  padding: 8px 20px;
+  border-radius: 999px;
+  border: none;
+  background: #222;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.rollButtonDisabled {
+  background: #ccc;
+  cursor: default;
+}
+
+.poolSection {
+  margin-top: 8px;
+}
+
+.poolHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.poolTitle {
+  margin: 0;
+}
+
+.poolMeta {
+  font-size: 13px;
+  color: #666;
+}
+
+.poolTip {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.poolEmpty {
+  color: #666;
+  font-style: italic;
+}
+
+.poolOuter {
+  display: flex;
+  justify-content: center;
+}
+
+.poolInner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  align-items: stretch;
+  max-width: 900px;
+}
+
+.finalSection {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: #fafafa;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.finalTitle {
+  margin: 0;
+  color: #166534;
+}
+
+.finalSuccess {
+  margin: 0;
+  color: #166534;
+}
+
+.undoWrap {
+  margin-top: 8px;
+}
+
+.undoButton {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #b91c1c;
+  background: #fff7f7;
+  color: #b91c1c;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.finalBody {
+  margin: 0;
+  color: #444;
+}
+
+.finalRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.finalSelect {
+  min-width: 260px;
+  padding: 4px;
+}
+
+.chooseButton {
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: none;
+  background: #166534;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chooseButtonDisabled {
+  background: #ccc;
+  cursor: default;
+}

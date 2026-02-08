@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import styles from "./GauntletClient.module.css";
 
 function formatDate(d) {
   if (!d) return "";
@@ -92,80 +93,48 @@ export default function GauntletClient({ current, upcoming, previous }) {
   }
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <div className={styles.container}>
+      <div className={styles.sectionButtons}>
         <button
           type="button"
           onClick={() => switchSection("current")}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 4,
-            border: "1px solid",
-            borderColor: selectedSection === "current" ? "#1976d2" : "#ccc",
-            background: selectedSection === "current" ? "#1976d2" : "#f5f5f5",
-            color: selectedSection === "current" ? "white" : "#333",
-            cursor: "pointer"
-          }}
+          className={`${styles.pill} ${selectedSection === "current" ? styles.pillActive : ""}`}
         >
           Current
         </button>
         <button
           type="button"
           onClick={() => switchSection("upcoming")}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 4,
-            border: "1px solid",
-            borderColor: selectedSection === "upcoming" ? "#1976d2" : "#ccc",
-            background: selectedSection === "upcoming" ? "#1976d2" : "#f5f5f5",
-            color: selectedSection === "upcoming" ? "white" : "#333",
-            cursor: "pointer"
-          }}
+          className={`${styles.pill} ${selectedSection === "upcoming" ? styles.pillActive : ""}`}
         >
           Upcoming
         </button>
         <button
           type="button"
           onClick={() => switchSection("previous")}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 4,
-            border: "1px solid",
-            borderColor: selectedSection === "previous" ? "#1976d2" : "#ccc",
-            background: selectedSection === "previous" ? "#1976d2" : "#f5f5f5",
-            color: selectedSection === "previous" ? "white" : "#333",
-            cursor: "pointer"
-          }}
+          className={`${styles.pill} ${selectedSection === "previous" ? styles.pillActive : ""}`}
         >
           Previous
         </button>
       </div>
 
       {!current.length && selectedSection === "current" && (
-        <p style={{ margin: 0 }}>No current gauntlet is running right now.</p>
+        <p className={styles.p0}>No current gauntlet is running right now.</p>
       )}
 
       {listForSection.length === 0 && selectedSection !== "current" && (
-        <p style={{ margin: 0 }}>No gauntlets in this section yet.</p>
+        <p className={styles.p0}>No gauntlets in this section yet.</p>
       )}
 
       {listForSection.length > 0 && (
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className={styles.stack}>
+          <div className={styles.gauntletButtons}>
             {listForSection.map((g) => (
               <button
                 key={g.id}
                 type="button"
                 onClick={() => setSelectedGauntletId(g.id)}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 4,
-                  border: "1px solid",
-                  borderColor: selectedGauntlet && selectedGauntlet.id === g.id ? "#1976d2" : "#ccc",
-                  background: selectedGauntlet && selectedGauntlet.id === g.id ? "#1976d2" : "#fff",
-                  color: selectedGauntlet && selectedGauntlet.id === g.id ? "white" : "#333",
-                  cursor: "pointer"
-                }}
+                className={`${styles.pill} ${styles.pillOnWhite} ${selectedGauntlet && selectedGauntlet.id === g.id ? styles.pillActive : ""}`}
               >
                 {g.name}
               </button>
@@ -173,25 +142,31 @@ export default function GauntletClient({ current, upcoming, previous }) {
           </div>
 
           {selectedGauntlet && (
-            <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 12 }}>
-              <h3 style={{ marginTop: 0, marginBottom: 8 }}>{selectedGauntlet.name}</h3>
+            <div className={styles.card}>
+              <h3 className={styles.cardTitle}>{selectedGauntlet.name}</h3>
+              <div className={styles.cardSub}>
+                <Link href={`/gauntlet/scoreboard/${selectedGauntlet.id}`}>
+                  View scoreboard →
+                </Link>
+              </div>
               {selectedGauntlet.heats.length === 0 ? (
-                <p style={{ margin: 0 }}>No heats configured for this gauntlet yet.</p>
+                <p className={styles.p0}>No heats configured for this gauntlet yet.</p>
               ) : (
-                <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 14 }}>
+                <div className="table-wrap">
+                <table className="table-compact">
                   <thead>
                     <tr>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Name</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Start</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>End</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Platforms</th>
-                          <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Your game</th>
-                          <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Status</th>
-                          <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 6 }}>Actions</th>
+                      <th>Name</th>
+                      <th>Start</th>
+                      <th>End</th>
+                      <th>Platforms</th>
+                      <th>Your game</th>
+                      <th>Status</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                        {selectedGauntlet.heats.map((h) => {
+                        {selectedGauntlet.heats.map((h, index) => {
                           const user = h.user || {};
                           const game = user.selectedGame || null;
                           const year = game ? getGameYear(game) : null;
@@ -200,6 +175,18 @@ export default function GauntletClient({ current, upcoming, previous }) {
                           const buttonLabel = hasPool ? "View roll pool" : "Go to game selection";
 
                           const now = new Date();
+                          const startsAt = h.startsAt ? new Date(h.startsAt) : null;
+                          let isHeatNotOpenYet = false;
+                          if (startsAt && !Number.isNaN(startsAt.getTime())) {
+                            const startOfDay = new Date(startsAt);
+                            startOfDay.setHours(0, 0, 0, 0);
+                            const openAt = new Date(startOfDay);
+                            openAt.setDate(openAt.getDate() - 1);
+                            if (now.getTime() < openAt.getTime()) {
+                              isHeatNotOpenYet = true;
+                            }
+                          }
+
                           const endsAt = h.endsAt ? new Date(h.endsAt) : null;
                           let isHeatOver = false;
                           if (endsAt && !Number.isNaN(endsAt.getTime())) {
@@ -210,32 +197,48 @@ export default function GauntletClient({ current, upcoming, previous }) {
                             }
                           }
 
+                          const effectiveButtonLabel = isHeatOver ? "View roll pool" : buttonLabel;
+
+                          let isLockedByPreviousHeat = false;
+                          let previousHeatLabel = null;
+                          if (index > 0) {
+                            const prev = selectedGauntlet.heats[index - 1];
+                            if (prev) {
+                              const prevUser = prev.user || {};
+                              const prevStatus = statusByHeatId[prev.id] || prevUser.status || "UNBEATEN";
+                              if (prevStatus !== "BEATEN" && prevStatus !== "GIVEN_UP") {
+                                isLockedByPreviousHeat = true;
+                                previousHeatLabel = prev.name || `Heat ${prev.order}`;
+                              }
+                            }
+                          }
+
                           return (
                             <tr key={h.id}>
-                              <td style={{ padding: 6 }}>{h.name || `Heat ${h.order}`}</td>
-                              <td style={{ padding: 6 }}>{formatDate(h.startsAt)}</td>
-                              <td style={{ padding: 6 }}>{formatDate(h.endsAt)}</td>
-                              <td style={{ padding: 6 }}>
+                              <td>{h.name || `Heat ${h.order}`}</td>
+                              <td>{formatDate(h.startsAt)}</td>
+                              <td>{formatDate(h.endsAt)}</td>
+                              <td>
                                 {(h.platforms || []).map((p) => p.name).join(", ")}
                               </td>
-                              <td style={{ padding: 6 }}>
+                              <td>
                                 {game ? (
                                   <span>
                                     {game.name}
                                     {year ? ` (${year})` : ""}
                                   </span>
                                 ) : (
-                                  <span style={{ color: "#777", fontStyle: "italic" }}>
+                                  <span className={styles.mutedItalic}>
                                     Not chosen yet
                                   </span>
                                 )}
                               </td>
-                              <td style={{ padding: 6 }}>
+                              <td>
                                 <select
                                   value={currentStatus}
                                   onChange={(e) => handleStatusChange(h.id, e.target.value)}
-                                  disabled={isHeatOver}
-                                  style={{ fontSize: 13 }}
+                                  disabled={isHeatOver || isHeatNotOpenYet || isLockedByPreviousHeat}
+                                  className={styles.select}
                                 >
                                   {STATUS_OPTIONS.map((opt) => (
                                     <option key={opt.value} value={opt.value}>
@@ -244,25 +247,32 @@ export default function GauntletClient({ current, upcoming, previous }) {
                                   ))}
                                 </select>
                               </td>
-                              <td style={{ padding: 6 }}>
-                                <Link href={`/gauntlet/heat/${h.id}`}>
-                                  <button
-                                    type="button"
-                                    style={{
-                                      padding: "4px 8px",
-                                      fontSize: 13,
-                                      opacity: isHeatOver ? 0.7 : 1
-                                    }}
-                                  >
-                                    {buttonLabel}
-                                  </button>
-                                </Link>
+                              <td>
+                                {isHeatNotOpenYet && !isHeatOver ? (
+                                  <span className={styles.mutedItalic}>
+                                    Heat not open yet - opens on {formatDate(new Date(new Date(h.startsAt).getTime() - 24 * 60 * 60 * 1000))}
+                                  </span>
+                                ) : isLockedByPreviousHeat && !isHeatOver ? (
+                                  <span className={styles.mutedItalic}>
+                                    Heat locked - complete previous heat{previousHeatLabel ? ` (${previousHeatLabel})` : ""}
+                                  </span>
+                                ) : (
+                                  <Link href={`/gauntlet/heat/${h.id}`}>
+                                    <button
+                                      type="button"
+                                      className={`${styles.actionButton} ${isHeatOver ? styles.actionButtonDim : ""}`}
+                                    >
+                                      {effectiveButtonLabel}
+                                    </button>
+                                  </Link>
+                                )}
                               </td>
                             </tr>
                           );
                         })}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           )}

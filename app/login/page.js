@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import styles from './page.module.css';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,7 +45,7 @@ export default function LoginPage() {
           Password
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
         </label>
-        {error && <p style={{ color: 'crimson' }}>{error}</p>}
+        {error && <p className={styles.error}>{error}</p>}
         <button disabled={loading} type="submit">{loading ? 'Signing in…' : 'Login'}</button>
       </form>
     </div>

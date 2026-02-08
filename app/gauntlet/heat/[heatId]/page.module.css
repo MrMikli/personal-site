@@ -1,0 +1,58 @@
+.container {
+  display: grid;
+  gap: 24px;
+}
+
+.center {
+  text-align: center;
+}
+
+.title {
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  margin-top: 0;
+  font-weight: 500;
+}
+
+.meta {
+  font-style: italic;
+  color: #555;
+  margin-top: 8px;
+}
+
+.banner {
+  padding: 16px;
+  border-radius: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.bannerWarning {
+  border: 2px solid #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.bannerDanger {
+  border: 2px solid #ef4444;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.bannerTitle {
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.bannerBody {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.locked {
+  filter: blur(6px);
+  pointer-events: none;
+  user-select: none;
+}

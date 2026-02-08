@@ -14,7 +14,7 @@ export async function POST(request, { params }) {
 
     const { heatId } = params;
 
-    const guard = await ensureHeatIsMutable(heatId);
+    const guard = await ensureHeatIsMutable(heatId, { userId: session.user.id });
     if (!guard.ok) {
       return NextResponse.json({ message: guard.message }, { status: guard.status });
     }
@@ -94,7 +94,7 @@ export async function DELETE(_request, { params }) {
 
     const { heatId } = params;
 
-    const guard = await ensureHeatIsMutable(heatId);
+    const guard = await ensureHeatIsMutable(heatId, { userId: session.user.id });
     if (!guard.ok) {
       return NextResponse.json({ message: guard.message }, { status: guard.status });
     }

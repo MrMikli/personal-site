@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import styles from "./SeedPlatformsClient.module.css";
 
 export default function SeedPlatformsClient() {
   const [loading, setLoading] = useState(false);
@@ -30,12 +31,12 @@ export default function SeedPlatformsClient() {
         {loading ? "Seeding platforms..." : "Seed all platforms from IGDB"}
       </button>
       {result && (
-        <div style={{ fontSize: 14 }}>
+        <div className={styles.result}>
           Inserted: {result.inserted} / Fetched: {result.totalFetched}
         </div>
       )}
       {error && (
-        <div style={{ color: "red", fontSize: 14 }}>
+        <div className={styles.error}>
           Error: {error}
         </div>
       )}

@@ -1,0 +1,153 @@
+.container {
+  display: grid;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.label {
+  display: grid;
+  gap: 4px;
+}
+
+.selectWrap {
+  /* anchor for :global react-select classNamePrefix */
+}
+
+.selectWrap :global(.select__control) {
+  min-height: 38px;
+  border-color: #ccc;
+  box-shadow: none;
+}
+
+.selectWrap :global(.select__control:hover) {
+  border-color: #999;
+}
+
+.selectWrap :global(.select__control--is-focused) {
+  border-color: #1976d2;
+}
+
+.selectWrap :global(.select__control--is-focused:hover) {
+  border-color: #1976d2;
+}
+
+.selectWrap :global(.select__menu) {
+  z-index: 10;
+}
+
+.selectWrap :global(.select__placeholder) {
+  color: #888;
+}
+
+.selectWrap :global(.select__single-value) {
+  color: #333;
+}
+
+.selectWrap :global(.select__option) {
+  background: white;
+  color: #333;
+}
+
+.selectWrap :global(.select__option--is-focused) {
+  background: #e3f2fd;
+}
+
+.selectWrap :global(.select__option--is-selected) {
+  background: #1976d2;
+  color: white;
+}
+
+.section {
+  margin-top: 8px;
+}
+
+.note {
+  margin-bottom: 8px;
+  font-style: italic;
+  color: #555;
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.result {
+  font-size: 13px;
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.clearBox {
+  padding: 6px 8px;
+  background: #f6f8fa;
+  border-radius: 6px;
+  color: #333;
+  display: grid;
+  gap: 4px;
+}
+
+.clearTitle {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.error {
+  color: red;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+}
+
+.modal {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  width: min(480px, 90vw);
+  display: grid;
+  gap: 12px;
+}
+
+.modalTitle {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.modalText {
+  font-size: 14px;
+  color: #444;
+}
+
+.warnLabel {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #d32f2f;
+}
+
+.modalActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.confirmButton {
+  color: white;
+}
+
+.confirmButtonEnabled {
+  background: #d32f2f;
+}
+
+.confirmButtonDisabled {
+  background: #ccc;
+}

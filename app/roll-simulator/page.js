@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,9 @@ export default async function RollSimulatorPage() {
   }));
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className={styles.container}>
       <h1>Roll simulator</h1>
-      <p style={{ maxWidth: 640 }}>
+      <p className={styles.lede}>
         This is a sandbox roll simulator. It doesn&apos;t count for any gauntlet heat,
         doesn&apos;t save anything to the database, and isn&apos;t tied to any user
         account. You can use it without being logged in.

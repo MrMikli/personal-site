@@ -1,0 +1,76 @@
+.container {
+  display: grid;
+  gap: 16px;
+}
+
+.error {
+  color: crimson;
+}
+
+.sectionGrid {
+  display: grid;
+  gap: 8px;
+  max-width: 600px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.gauntletSelect {
+  display: grid;
+  gap: 4px;
+  max-width: 400px;
+}
+
+.manageGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.orderInput {
+  width: 70px;
+}
+
+.countInput {
+  width: 80px;
+}
+
+.platformsGridSmall {
+  display: grid;
+  gap: 4px;
+}
+
+.platformRowSmall {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.platformsSection {
+  display: grid;
+  gap: 8px;
+}
+
+.platformsList {
+  display: grid;
+  gap: 6px;
+}
+
+.platformRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.saveButton {
+  margin-right: 8px;
+}
+
+.dateGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}

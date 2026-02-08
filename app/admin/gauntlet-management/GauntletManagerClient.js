@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import styles from "./GauntletManagerClient.module.css";
 
 export default function GauntletManagerClient() {
   const [gauntlets, setGauntlets] = useState([]);
@@ -160,13 +161,13 @@ export default function GauntletManagerClient() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      {error && <div style={{ color: "crimson" }}>{error}</div>}
+    <div className={styles.container}>
+      {error && <div className={styles.error}>{error}</div>}
 
       <section>
         <h2>Create Gauntlet</h2>
-        <div style={{ display: "grid", gap: 8, maxWidth: 600 }}>
-          <label style={{ display: "grid", gap: 4 }}>
+        <div className={styles.sectionGrid}>
+          <label className={styles.field}>
             <span>Name</span>
             <input value={gName} onChange={(e) => setGName(e.target.value)} />
           </label>
@@ -178,7 +179,7 @@ export default function GauntletManagerClient() {
 
       <section>
         <h2>Manage Heats</h2>
-        <label style={{ display: "grid", gap: 4, maxWidth: 400 }}>
+        <label className={styles.gauntletSelect}>
           <span>Select Gauntlet</span>
           <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
             <option value="">-- Choose --</option>
@@ -191,31 +192,32 @@ export default function GauntletManagerClient() {
         </label>
 
         {selectedId && (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className={styles.manageGrid}>
             <div>
               <h3>Existing Heats</h3>
               {heats.length === 0 ? (
                 <p>No heats yet.</p>
               ) : (
-                <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Order</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Name</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Start Date</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>End Date</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Default Count</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Platforms</th>
-                      <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {heats.map((h) => (
-                      <tr key={h.id}>
-                        <td style={{ padding: 8 }}>
+                <div className="table-wrap">
+                  <table className="table-compact">
+                    <thead>
+                      <tr>
+                        <th>Order</th>
+                        <th>Name</th>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Default Count</th>
+                        <th>Platforms</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {heats.map((h) => (
+                        <tr key={h.id}>
+                          <td>
                           <input
                             type="number"
-                            style={{ width: 70 }}
+                            className={styles.orderInput}
                             value={h.order ?? ""}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -226,8 +228,8 @@ export default function GauntletManagerClient() {
                               );
                             }}
                           />
-                        </td>
-                        <td style={{ padding: 8 }}>
+                          </td>
+                          <td>
                           <input
                             value={h.name || ""}
                             onChange={(e) => {
@@ -237,8 +239,8 @@ export default function GauntletManagerClient() {
                               );
                             }}
                           />
-                        </td>
-                        <td style={{ padding: 8 }}>
+                          </td>
+                          <td>
                           <input
                             type="date"
                             value={h.startsAt || ""}
@@ -249,8 +251,8 @@ export default function GauntletManagerClient() {
                               );
                             }}
                           />
-                        </td>
-                        <td style={{ padding: 8 }}>
+                          </td>
+                          <td>
                           <input
                             type="date"
                             value={h.endsAt || ""}
@@ -261,12 +263,12 @@ export default function GauntletManagerClient() {
                               );
                             }}
                           />
-                        </td>
-                        <td style={{ padding: 8 }}>
+                          </td>
+                          <td>
                           <input
                             type="number"
                             min={1}
-                            style={{ width: 80 }}
+                            className={styles.countInput}
                             value={h.defaultGameCounter ?? 1}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -279,15 +281,15 @@ export default function GauntletManagerClient() {
                               );
                             }}
                           />
-                        </td>
-                        <td style={{ padding: 8 }}>
-                          <div style={{ display: "grid", gap: 4 }}>
+                          </td>
+                        <td>
+                          <div className={styles.platformsGridSmall}>
                             {platforms.map((p) => {
                               const checked = (h.platforms || []).some((hp) => hp.id === p.id);
                               return (
                                 <label
                                   key={p.id}
-                                  style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}
+                                  className={styles.platformRowSmall}
                                 >
                                   <input
                                     type="checkbox"
@@ -322,11 +324,11 @@ export default function GauntletManagerClient() {
                             })}
                           </div>
                         </td>
-                        <td style={{ padding: 8 }}>
+                        <td>
                           <button
                             onClick={() => updateHeat(h)}
                             disabled={loading}
-                            style={{ marginRight: 8 }}
+                            className={styles.saveButton}
                           >
                             Save
                           </button>
@@ -338,39 +340,40 @@ export default function GauntletManagerClient() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
 
             <div>
               <h3>Add Heat</h3>
-              <div style={{ display: "grid", gap: 8, maxWidth: 600 }}>
-                <label style={{ display: "grid", gap: 4 }}>
+              <div className={styles.sectionGrid}>
+                <label className={styles.field}>
                   <span>Name (optional)</span>
                   <input value={hName} onChange={(e) => setHName(e.target.value)} />
                 </label>
-                <label style={{ display: "grid", gap: 4 }}>
+                <label className={styles.field}>
                   <span>Order (auto)</span>
                   <input type="number" value={nextOrder} readOnly />
                 </label>
-                <label style={{ display: "grid", gap: 4 }}>
+                <label className={styles.field}>
                   <span>Default Game Counter</span>
                   <input type="number" min={1} value={hDefaultCount} onChange={(e) => setHDefaultCount(e.target.value)} />
                 </label>
-                <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}>
-                  <label style={{ display: "grid", gap: 4 }}>
+                <div className={styles.dateGrid}>
+                  <label className={styles.field}>
                     <span>Start Date</span>
                     <input type="date" value={hStartsAt} onChange={(e) => setHStartsAt(e.target.value)} />
                   </label>
-                  <label style={{ display: "grid", gap: 4 }}>
+                  <label className={styles.field}>
                     <span>End Date</span>
                     <input type="date" value={hEndsAt} onChange={(e) => setHEndsAt(e.target.value)} />
                   </label>
                 </div>
-                <div style={{ display: "grid", gap: 8 }}>
+                <div className={styles.platformsSection}>
                   <span>Platforms</span>
-                  <div style={{ display: "grid", gap: 6 }}>
+                  <div className={styles.platformsList}>
                     {platforms.map((p) => (
-                      <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <label key={p.id} className={styles.platformRow}>
                         <input
                           type="checkbox"
                           checked={selectedPlatformIds.includes(p.id)}

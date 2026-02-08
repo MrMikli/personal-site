@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import GameCard from "@/app/components/GameCard";
+import styles from "./RollingWheel.module.css";
 
 // Visual layout configuration
 const CARD_WIDTH = 150; // should stay in sync with GameCard maxWidth
@@ -45,37 +46,15 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
   }
 
   return (
-    <div
-      style={{
-        width: viewportWidth,
-        overflow: "hidden",
-        borderRadius: 12,
-        border: "1px solid #ddd",
-        background: "#f7f7f7",
-        boxShadow: "inset 0 0 8px rgba(0,0,0,0.08)",
-        padding: "12px 0",
-        position: "relative"
-      }}
-    >
+    <div className={styles.wheel}>
       {/* Center selector line */}
       {!finished && (
-        <div id ="selector-line"
-          style={{
-            position: "absolute",
-            top: 4,
-            bottom: 4,
-            left: "50%",
-            transform: "translateX(-50%)",
-            borderLeft: "2px solid rgba(0,0,0,0.35)",
-            pointerEvents: "none",
-            zIndex: 5
-          }}
-        />
+        <div id="selector-line" className={styles.selectorLine} />
       )}
 
       <motion.div
         key={rollKey}
-        style={{ display: "flex", position: "relative", zIndex: 1 }}
+        className={styles.strip}
         initial={{ x: 0 }}
         animate={{ x: endX }}
         transition={{
@@ -93,18 +72,7 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
 
           const cardInner = (
             <div
-              style={{
-                display: "inline-block",
-                ...(isSelected
-                  ? {
-                      borderRadius: 10,
-                      padding: 3,
-                      boxShadow: "0 0 18px rgba(255, 215, 0, 0.85)",
-                      border: "2px solid #facc15",
-                      background: "rgba(0,0,0,0.4)"
-                    }
-                  : {})
-              }}
+              className={`${styles.cardWrap} ${isSelected ? styles.cardWrapSelected : ""}`.trim()}
             >
               <GameCard game={game} variant="wheel" />
             </div>
@@ -113,32 +81,17 @@ export default function RollingWheel({ games, chosenIndex, onComplete }) {
           return (
             <div
               key={`${game.id}-${idx}`}
-              style={{
-                width: CARD_WIDTH,
-                marginRight: SLOT_GAP,
-                flex: "0 0 auto",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                transform: isSelected ? "scale(1.08)" : "scale(1)",
-                transition: "transform 0.25s ease-out",
-                zIndex: isSelected ? 2 : 1
-              }}
+              className={`${styles.slot} ${isSelected ? styles.slotSelected : ""}`.trim()}
             >
               <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 4
-                }}
+                className={styles.slotInner}
               >
                 {isSelected && backlogUrl ? (
                   <Link
                     href={backlogUrl}
                     target="_blank"
                     rel="noreferrer"
-                    style={{ textDecoration: "none" }}
+                    className={styles.backlogLink}
                   >
                     {cardInner}
                   </Link>

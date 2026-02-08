@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import GameCard from "@/app/components/GameCard";
 import RollingWheel from "./RollingWheel";
+import styles from "./HeatRollClient.module.css";
 
 function buildInitialTargets(platforms, defaultGameCounter) {
   if (!platforms.length || defaultGameCounter <= 0) return {};
@@ -75,6 +76,14 @@ export default function HeatRollClient({
 
   const effectiveRollCount = rolls.length + (pendingRoll ? 1 : 0);
   const rollsUsedLabel = `${effectiveRollCount} / ${defaultGameCounter} rolled`;
+
+  const volumePct = useMemo(() => {
+    const pct = isMuted ? 0 : Math.round((Number(volume) || 0) * 100);
+    const snapped = Math.min(100, Math.max(0, Math.round(pct / 5) * 5));
+    return snapped;
+  }, [isMuted, volume]);
+
+  const volumeFillClass = styles[`volumeFill${volumePct}`] || styles.volumeFill0;
 
   async function handleRoll() {
     if (rollingRef.current || isRolling || isHeatOver) return;
@@ -399,42 +408,26 @@ export default function HeatRollClient({
   return (
     <>
       <div
-        style={{
-          marginTop: 8,
-          display: "flex",
-          gap: 16,
-          alignItems: "flex-start",
-          flexWrap: "wrap"
-        }}
+        className={styles.configRow}
       >
         <div
           aria-label="Roll configuration"
-          style={{
-            padding: 12,
-            borderRadius: 8,
-            border: "1px solid #e0e0e0",
-            background: "#fafafa",
-            display: "grid",
-            gap: 8,
-            width: "fit-content"
-          }}
+          className={styles.configCard}
         >
-          <h2 style={{ margin: 0, fontSize: 16, color: "#333" }}>Configuration</h2>
-          <div style={{ fontSize: 13, color: "#444" }}>
-              <><div style={{ color: "#ff0000" }}>Caution:</div><div>Once you roll, your configuration for this heat is locked.</div> <br /><div>Choose how many rolls to aim for on each platform (min 1 each).</div></>
+          <h2 className={styles.configTitle}>Configuration</h2>
+          <div className={styles.configHelp}>
+            <div className={styles.cautionTitle}>Caution:</div>
+            <div>Once you roll, your configuration for this heat is locked.</div>
+            <br />
+            <div>Choose how many rolls to aim for on each platform (min 1 each).</div>
           </div>
           <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 12,
-              flexDirection: "column",
-            }}
+            className={styles.targets}
           >
             {(platforms || []).map((p) => (
               <label
                 key={p.id}
-                style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 , color: "#333"  }}
+                className={styles.targetRow}
               >
                 <span>
                   {p.name}
@@ -449,25 +442,25 @@ export default function HeatRollClient({
                     max={maxPerPlatform}
                     value={platformTargets[p.id] ?? ""}
                     onChange={(e) => handleTargetChange(p.id, e.target.value)}
-                    style={{ width: 60 }}
+                    className={styles.targetInput}
                   />
                 )}
               </label>
             ))}
           </div>
           {!isLocked && (
-            <div style={{ fontSize: 12, color: "#666" }}>
+            <div className={styles.totals}>
               Configured total: {totalConfigured} out of {defaultGameCounter}
               {configMismatch && (
-                <div style={{ color: "crimson", marginTop: 4 }}>
+                <div className={styles.totalsError}>
                   Total must equal {defaultGameCounter} before you can roll.
                 </div>
               )}
             </div>
           )}
 
-          <div style={{ fontSize: 13, color: "#333", marginTop: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div className={styles.western}>
+            <label className={styles.westernLabel}>
               <span>Minimum western-release games:</span>
               {isLocked ? (
                 <span>{westernRequired}</span>
@@ -479,11 +472,11 @@ export default function HeatRollClient({
                   value={westernRequired}
                   disabled={isHeatOver}
                   onChange={(e) => handleWesternRequiredChange(e.target.value)}
-                  style={{ width: 72 }}
+                  className={styles.westernInput}
                 />
               )}
             </label>
-            <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+            <div className={styles.westernHelp}>
               At least this many of your rolled games will be guaranteed to have a Western-region release (EU, NA, AU, WW). <br /> 
               Reminder: You are always allowed to do a technical veto any game that can't be acquired in English, this just makes rolling faster if you're certain you don't want to deal with any moonrunes at all. 
             </div>
@@ -492,33 +485,16 @@ export default function HeatRollClient({
 
         {isAdmin && !isHeatOver && (
           <div
-            style={{
-              padding: 12,
-              borderRadius: 8,
-              border: "1px dashed #b91c1c",
-              background: "#fff7f7",
-              maxWidth: 260,
-              display: "grid",
-              gap: 8,
-              fontSize: 13
-            }}
+            className={styles.adminBox}
           >
-            <div style={{ fontWeight: 600, color: "#b91c1c" }}>Admin only</div>
-            <div style={{ color: "#7f1d1d" }}>
+            <div className={styles.adminTitle}>Admin only</div>
+            <div className={styles.adminText}>
               Reset your rolls, configuration, and picked game for this heat.
             </div>
             <button
               type="button"
               onClick={handleAdminReset}
-              style={{
-                padding: "4px 10px",
-                borderRadius: 999,
-                border: "1px solid #b91c1c",
-                background: "white",
-                color: "#b91c1c",
-                fontWeight: 600,
-                cursor: "pointer"
-              }}
+              className={styles.adminButton}
             >
               Reset my rolls
             </button>
@@ -527,58 +503,28 @@ export default function HeatRollClient({
       </div>
 
       {error && (
-        <div style={{ color: "crimson", marginTop: 8 }}>{error}</div>
+        <div className={styles.error}>{error}</div>
       )}
 
       <section
         aria-label="Rolling area"
-        style={{
-          marginTop: 8,
-          padding: 24,
-          borderRadius: 12,
-          border: "1px solid #ddd",
-          minHeight: 220,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background:
-            "radial-gradient(circle at top, rgba(255,255,255,0.9), rgba(245,245,245,0.95))",
-          gap: 16
-        }}
+        className={styles.rollingArea}
       >
-        <div style={{ textAlign: "center", maxWidth: 480 }}>
-          <p style={{ color: "#666", marginBottom: 8 }}>
+        <div className={styles.rollingTop}>
+          <p className={styles.rollingNote}>
             {isHeatOver
               ? "This heat is over. You can review your pool, but cannot roll again."
               : ""}
           </p>
           {!isHeatOver && (
             <div
-              style={{
-                marginTop: 4,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8
-              }}
+              className={styles.volumeRow}
             >
               <button
                 type="button"
                 onClick={handleToggleMute}
                 aria-label={isMuted ? "Unmute sound" : "Mute sound"}
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: "999px",
-                  border: "1px solid #d1d5db",
-                  background: "#f9fafb",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  padding: 0
-                }}
+                className={styles.muteButton}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -617,24 +563,11 @@ export default function HeatRollClient({
               </button>
               <div
                 aria-hidden="true"
-                style={{
-                  position: "relative",
-                  width: 80,
-                  height: 6,
-                  borderRadius: 999,
-                  background: "#e5e7eb",
-                  overflow: "hidden"
-                }}
+                className={styles.volumeBar}
                 onClick={handleVolumeBarClick}
               >
                 <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: isMuted ? "0%" : `${Math.round(volume * 100)}%`,
-                    background: "#4b5563",
-                    transition: "width 150ms ease-out, background-color 150ms ease-out"
-                  }}
+                  className={`${styles.volumeFill} ${volumeFillClass}`.trim()}
                 />
               </div>
             </div>
@@ -657,21 +590,7 @@ export default function HeatRollClient({
             rolls.length >= defaultGameCounter ||
             configMismatch
           }
-          style={{
-            padding: "8px 20px",
-            borderRadius: 999,
-            border: "none",
-            background:
-              isHeatOver || isRolling || rolls.length >= defaultGameCounter || configMismatch
-                ? "#ccc"
-                : "#222",
-            color: "white",
-            cursor:
-              isHeatOver || isRolling || rolls.length >= defaultGameCounter || configMismatch
-                ? "default"
-                : "pointer",
-            fontWeight: 600
-          }}
+          className={`${styles.rollButton} ${(isHeatOver || isRolling || rolls.length >= defaultGameCounter || configMismatch) ? styles.rollButtonDisabled : ""}`.trim()}
         >
           {isHeatOver
             ? "Heat over"
@@ -683,42 +602,23 @@ export default function HeatRollClient({
         </button>
       </section>
 
-      <section aria-label="Rolled games pool" style={{ marginTop: 8 }}>
+      <section aria-label="Rolled games pool" className={styles.poolSection}>
         <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            marginBottom: 12
-          }}
+          className={styles.poolHeader}
         >
-          <h3 style={{ margin: 0 }}>Pool</h3>
-          <span style={{ fontSize: 13, color: "#666" }}>{rollsUsedLabel}</span>
+          <h3 className={styles.poolTitle}>Pool</h3>
+          <span className={styles.poolMeta}>{rollsUsedLabel}</span>
         </div>
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>
+        <div className={styles.poolTip}>
             Tip: Click on a game in the pool to visit the Backloggd page for that game.
         </div>
         {rolls.length === 0 ? (
-          <p style={{ color: "#666", fontStyle: "italic" }}>
+          <p className={styles.poolEmpty}>
             No games in the pool yet. Once you roll, they will appear here.
           </p>
         ) : (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center"
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                justifyContent: "center",
-                gap: 12,
-                alignItems: "stretch",
-                maxWidth: 5 * 180 // approximate card width plus gap for nicer centering
-              }}
-            >
+          <div className={styles.poolOuter}>
+            <div className={styles.poolInner}>
               {rolls.map((roll) => (
                 <GameCard
                   key={roll.id}
@@ -735,39 +635,20 @@ export default function HeatRollClient({
       {isPoolFull && (
         <section
           aria-label="Choose final game"
-          style={{
-            marginTop: 16,
-            padding: 16,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            background: "#fafafa",
-            maxWidth: 720,
-            marginLeft: "auto",
-            marginRight: "auto",
-            display: "grid",
-            gap: 12
-          }}
+          className={styles.finalSection}
         >
-          <h3 style={{ margin: 0 , color: "#166534" }}>Final choice for this heat</h3>
+          <h3 className={styles.finalTitle}>Final choice for this heat</h3>
           {finalSelectedGameId ? (
             <>
-              <p style={{ margin: 0, color: "#166534" }}>
+              <p className={styles.finalSuccess}>
                 You have chosen your game for this heat.
               </p>
               {!isHeatOver && (
-                <div style={{ marginTop: 8 }}>
+                <div className={styles.undoWrap}>
                   <button
                     type="button"
                     onClick={handleUndoPick}
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: 999,
-                      border: "1px solid #b91c1c",
-                      background: "#fff7f7",
-                      color: "#b91c1c",
-                      fontSize: 13,
-                      cursor: "pointer"
-                    }}
+                    className={styles.undoButton}
                   >
                     Undo pick (technical veto)
                   </button>
@@ -776,24 +657,19 @@ export default function HeatRollClient({
             </>
           ) : (
             <>
-              <p style={{ margin: 0, color: "#444" }}>
+              <p className={styles.finalBody}>
                 {isHeatOver
                   ? "This heat is over. You cannot change your chosen game anymore."
                   : "Select one of your rolled games to be your official pick for this heat."}
               </p>
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  flexWrap: "wrap"
-                }}
+                className={styles.finalRow}
               >
                 <select
                   value={selectedRollId || ""}
                   onChange={(e) => setSelectedRollId(e.target.value || null)}
                   disabled={isHeatOver}
-                  style={{ minWidth: 260, padding: 4 }}
+                  className={styles.finalSelect}
                 >
                   <option value="" disabled>
                     Choose a game
@@ -821,15 +697,7 @@ export default function HeatRollClient({
                 <button
                   type="button"
                   onClick={handleChooseGame}
-                  style={{
-                    padding: "6px 16px",
-                    borderRadius: 999,
-                    border: "none",
-                    background: isHeatOver ? "#ccc" : "#166534",
-                    color: "white",
-                    fontWeight: 600,
-                    cursor: isHeatOver ? "default" : "pointer"
-                  }}
+                  className={`${styles.chooseButton} ${isHeatOver ? styles.chooseButtonDisabled : ""}`.trim()}
                   disabled={isHeatOver}
                 >
                   Choose

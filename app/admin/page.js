@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "../../lib/session";
 import UsersList from "./users-list";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function AdminPage() {
   return (
     <div>
       <h1>Admin</h1>
-      <ul style={{ display: 'grid', gap: 8, paddingLeft: 0, listStyle: 'none', marginBottom: 16 }}>
+      <ul className={styles.navList}>
         <li><Link href="/admin/status-page">DB Status</Link></li>
         <li><Link href="/admin/game-management">Game Management</Link></li>
         <li><Link href="/admin/gauntlet-management">Gauntlet Management</Link></li>

@@ -1,0 +1,77 @@
+.container {
+  display: grid;
+  gap: 16px;
+}
+
+.sectionButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.p0 {
+  margin: 0;
+}
+
+.gauntletButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+.pill {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
+  color: #333;
+  cursor: pointer;
+}
+
+.pillActive {
+  border-color: #1976d2;
+  background: #1976d2 !important;
+  color: #ffffff;
+}
+
+.pillOnWhite {
+  background: #ffffff;
+}
+
+.card {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.cardTitle {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.cardSub {
+  margin-bottom: 10px;
+}
+
+.mutedItalic {
+  color: #777;
+  font-style: italic;
+}
+
+.select {
+  font-size: 13px;
+}
+
+.actionButton {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.actionButtonDim {
+  opacity: 0.7;
+}

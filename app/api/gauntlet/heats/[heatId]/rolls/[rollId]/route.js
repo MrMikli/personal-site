@@ -18,7 +18,7 @@ export async function DELETE(_request, { params }) {
     return NextResponse.json({ message: "Missing heatId or rollId" }, { status: 400 });
   }
 
-  const guard = await ensureHeatIsMutable(heatId);
+  const guard = await ensureHeatIsMutable(heatId, { userId: session.user.id });
   if (!guard.ok) {
     return NextResponse.json({ message: guard.message }, { status: guard.status });
   }

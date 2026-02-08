@@ -1,0 +1,27 @@
+.header {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.nav {
+  display: flex;
+  gap: 12px;
+}
+
+.userArea {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.signedInAs {
+  opacity: 0.7;
+}
+
+.main {
+  padding: 24px;
+}

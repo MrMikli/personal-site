@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import styles from './page.module.css';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -42,7 +43,7 @@ export default function RegisterPage() {
           Password (min 8 chars)
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
         </label>
-        {error && <p style={{ color: 'crimson' }}>{error}</p>}
+        {error && <p className={styles.error}>{error}</p>}
         <button disabled={loading} type="submit">{loading ? 'Creating…' : 'Create account'}</button>
       </form>
     </div>

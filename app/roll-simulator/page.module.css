@@ -1,0 +1,8 @@
+.container {
+  display: grid;
+  gap: 16px;
+}
+
+.lede {
+  max-width: 640px;
+}

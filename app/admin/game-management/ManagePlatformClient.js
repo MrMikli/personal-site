@@ -1,29 +1,8 @@
 "use client";
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import styles from "./ManagePlatformClient.module.css";
 const Select = dynamic(() => import("react-select"), { ssr: false });
-
-const selectStyles = {
-  control: (base, state) => ({
-    ...base,
-    minHeight: 38,
-    borderColor: state.isFocused ? '#1976d2' : '#ccc',
-    boxShadow: 'none',
-    '&:hover': { borderColor: state.isFocused ? '#1976d2' : '#999' }
-  }),
-  option: (base, state) => ({
-    ...base,
-    backgroundColor: state.isSelected
-      ? '#1976d2'
-      : state.isFocused
-      ? '#e3f2fd'
-      : 'white',
-    color: state.isSelected ? 'white' : '#333'
-  }),
-  placeholder: (base) => ({ ...base, color: '#888' }),
-  singleValue: (base) => ({ ...base, color: '#333' }),
-  menu: (base) => ({ ...base, zIndex: 10 })
-};
 
 function formatName(p) {
   return p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name;
@@ -156,23 +135,24 @@ export default function ManagePlatformClient({ platforms }) {
   }
 
   return (
-    <div style={{ display: "grid", gap: 8, maxWidth: 480 }}>
-      <label style={{ display: "grid", gap: 4 }}>
+    <div className={styles.container}>
+      <label className={styles.label}>
         <span>Select platform</span>
-        <Select
-          value={selectedOption}
-          onChange={(opt) => setSelectedOption(opt)}
-          options={options}
-          isSearchable
-          placeholder="Search or select a platform"
-          styles={selectStyles}
-          classNamePrefix="select"
-        />
+        <div className={styles.selectWrap}>
+          <Select
+            value={selectedOption}
+            onChange={(opt) => setSelectedOption(opt)}
+            options={options}
+            isSearchable
+            placeholder="Search or select a platform"
+            classNamePrefix="select"
+          />
+        </div>
       </label>
 
       {selectedOption && (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ marginBottom: 8, fontStyle: 'italic', color: '#555' }}>
+        <div className={styles.section}>
+          <div className={styles.note}>
             {selected && (
               <>
                 Current number of games for {formatName(selected)}: {selected._count?.games ?? 0}
@@ -180,17 +160,19 @@ export default function ManagePlatformClient({ platforms }) {
             )}
           </div>
 
-          <button onClick={handleSync} disabled={loading}>
-            {loading ? 'Syncing…' : `Sync games for ${formatName(selected || { name: 'selected platform' })}`}
-          </button>
-          <button onClick={handleResyncClearFirst} disabled={loading} style={{ marginLeft: 8 }}>
-            {loading ? 'Working…' : 'Re-sync (clear first)'}
-          </button>
+          <div className={styles.buttons}>
+            <button onClick={handleSync} disabled={loading}>
+              {loading ? 'Syncing…' : `Sync games for ${formatName(selected || { name: 'selected platform' })}`}
+            </button>
+            <button onClick={handleResyncClearFirst} disabled={loading}>
+              {loading ? 'Working…' : 'Re-sync (clear first)'}
+            </button>
+          </div>
           {result && (
-            <div style={{ fontSize: 13, marginTop: 8, display: 'grid', gap: 4 }}>
+            <div className={styles.result}>
               {result.clear && (
-                <div style={{ padding: '6px 8px', background: '#f6f8fa', borderRadius: 6 , color: '#333', display: 'grid', gap: 4 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>Clearing existing data</div>
+                <div className={styles.clearBox}>
+                  <div className={styles.clearTitle}>Clearing existing data</div>
                   <div>Total to process: {result.clear.total ?? 0}</div>
                   <div>Processed: {result.clear.processed ?? 0}</div>
                   <div>Disconnected: {result.clear.disconnected ?? 0}</div>
@@ -204,7 +186,7 @@ export default function ManagePlatformClient({ platforms }) {
             </div>
           )}
           {error && (
-            <div style={{ color: 'red', fontSize: 13, marginTop: 8 }}>
+            <div className={styles.error}>
               Error: {error}
             </div>
           )}
@@ -212,19 +194,23 @@ export default function ManagePlatformClient({ platforms }) {
       )}
 
       {showConfirm && selected && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'grid', placeItems: 'center' }}>
-          <div style={{ background: 'white', padding: 16, borderRadius: 8, width: 'min(480px, 90vw)', display: 'grid', gap: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Re-sync: clear data then import</div>
-            <div style={{ fontSize: 14, color: '#444' }}>
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <div className={styles.modalTitle}>Re-sync: clear data then import</div>
+            <div className={styles.modalText}>
               This will remove all existing games and associations for {formatName(selected)} on this site, then import afresh from IGDB.
             </div>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#d32f2f' }}>
+            <label className={styles.warnLabel}>
               <input type="checkbox" checked={ackClear} onChange={(e) => setAckClear(e.target.checked)} />
               <span>I understand this action is destructive and cannot be undone.</span>
             </label>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <div className={styles.modalActions}>
               <button onClick={() => setShowConfirm(false)}>Cancel</button>
-              <button onClick={startClearThenSync} disabled={!ackClear} style={{ background: ackClear ? '#d32f2f' : '#ccc', color: 'white' }}>
+              <button
+                onClick={startClearThenSync}
+                disabled={!ackClear}
+                className={`${styles.confirmButton} ${ackClear ? styles.confirmButtonEnabled : styles.confirmButtonDisabled}`.trim()}
+              >
                 Confirm and start
               </button>
             </div>

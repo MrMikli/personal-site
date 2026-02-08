@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "../../lib/session";
 import { prisma } from "@/lib/prisma";
 import GauntletClient from "./GauntletClient";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -123,7 +124,7 @@ export default async function GauntletPage() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className={styles.container}>
       <h1>Retro Game Gauntlet</h1>
       <p>Welcome, {session.user.username}</p>
 

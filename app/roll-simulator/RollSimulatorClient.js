@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RollingWheel from "@/app/gauntlet/heat/RollingWheel";
+import styles from "./RollSimulatorClient.module.css";
 
 export default function RollSimulatorClient({ platforms }) {
   const [selectedPlatformIds, setSelectedPlatformIds] = useState(
@@ -17,6 +18,14 @@ export default function RollSimulatorClient({ platforms }) {
   const fadeIntervalRef = useRef(null);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.5);
+
+  const volumePct = useMemo(() => {
+    const pct = isMuted ? 0 : Math.round((Number(volume) || 0) * 100);
+    const snapped = Math.min(100, Math.max(0, Math.round(pct / 5) * 5));
+    return snapped;
+  }, [isMuted, volume]);
+
+  const volumeFillClass = styles[`volumeFill${volumePct}`] || styles.volumeFill0;
 
   const hasAnySelected = selectedPlatformIds.length > 0;
 
@@ -188,41 +197,21 @@ export default function RollSimulatorClient({ platforms }) {
   return (
     <>
       <div
-        style={{
-          marginTop: 8,
-          display: "flex",
-          gap: 16,
-          alignItems: "flex-start",
-          flexWrap: "wrap"
-        }}
+        className={styles.configRow}
       >
         <div
           aria-label="Roll configuration"
-          style={{
-            padding: 12,
-            borderRadius: 8,
-            border: "1px solid #e0e0e0",
-            background: "#fafafa",
-            display: "grid",
-            gap: 8,
-            width: "fit-content"
-          }}
+          className={styles.configCard}
         >
-          <h2 style={{ margin: 0, fontSize: 16, color: "#333" }}>Configuration</h2>
-          <div style={{ fontSize: 13, color: "#444", maxWidth: 520 }}>
+          <h2 className={styles.configTitle}>Configuration</h2>
+          <div className={styles.configHelp}>
             Choose which consoles to roll from. 
           </div>
           <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              flexDirection: "column",
-              marginTop: 4
-            }}
+            className={styles.platformList}
           >
             {platforms.length === 0 ? (
-              <span style={{ fontSize: 13, color: "#666" }}>
+              <span className={styles.mutedNote}>
                 No platforms with games were found. Sync some games first.
               </span>
             ) : (
@@ -231,13 +220,7 @@ export default function RollSimulatorClient({ platforms }) {
                 return (
                   <label
                     key={p.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 13,
-                      color: "#333"
-                    }}
+                    className={styles.platformRow}
                   >
                     <input
                       type="checkbox"
@@ -256,8 +239,8 @@ export default function RollSimulatorClient({ platforms }) {
               })
             )}
           </div>
-          <div style={{ fontSize: 13, color: "#333", marginTop: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div className={styles.western}>
+            <label className={styles.westernLabel}>
               <input
                 type="checkbox"
                 checked={onlyWestern}
@@ -265,7 +248,7 @@ export default function RollSimulatorClient({ platforms }) {
               />
               <span>Only roll games with a Western-region release</span>
             </label>
-            <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+            <div className={styles.westernHelp}>
               Western-region means EU, NA, AU, or Worldwide release flags from
               IGDB.
             </div>
@@ -274,52 +257,22 @@ export default function RollSimulatorClient({ platforms }) {
       </div>
 
       {error && (
-        <div style={{ color: "crimson", marginTop: 8 }}>{error}</div>
+        <div className={styles.error}>{error}</div>
       )}
 
       <section
         aria-label="Rolling area"
-        style={{
-          marginTop: 8,
-          padding: 24,
-          borderRadius: 12,
-          border: "1px solid #ddd",
-          minHeight: 220,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background:
-            "radial-gradient(circle at top, rgba(255,255,255,0.9), rgba(245,245,245,0.95))",
-          gap: 16
-        }}
+        className={styles.rollingArea}
       >
-        <div style={{ textAlign: "center", maxWidth: 480 }}>
+        <div className={styles.rollingTop}>
           <div
-            style={{
-              marginTop: 4,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8
-            }}
+            className={styles.volumeRow}
           >
             <button
               type="button"
               onClick={handleToggleMute}
               aria-label={isMuted ? "Unmute sound" : "Mute sound"}
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: "999px",
-                border: "1px solid #d1d5db",
-                background: "#f9fafb",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                padding: 0
-              }}
+              className={styles.muteButton}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -358,24 +311,11 @@ export default function RollSimulatorClient({ platforms }) {
             </button>
             <div
               aria-hidden="true"
-              style={{
-                position: "relative",
-                width: 80,
-                height: 6,
-                borderRadius: 999,
-                background: "#e5e7eb",
-                overflow: "hidden"
-              }}
+              className={styles.volumeBar}
               onClick={handleVolumeBarClick}
             >
               <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: isMuted ? "0%" : `${Math.round(volume * 100)}%`,
-                  background: "#4b5563",
-                  transition: "width 150ms ease-out, background-color 150ms ease-out"
-                }}
+                className={`${styles.volumeFill} ${volumeFillClass}`.trim()}
               />
             </div>
           </div>
@@ -392,21 +332,7 @@ export default function RollSimulatorClient({ platforms }) {
         <button
           onClick={handleRoll}
           disabled={isRolling || !hasAnySelected}
-          style={{
-            padding: "8px 20px",
-            borderRadius: 999,
-            border: "none",
-            background:
-              isRolling || !hasAnySelected
-                ? "#ccc"
-                : "#222",
-            color: "white",
-            cursor:
-              isRolling || !hasAnySelected
-                ? "default"
-                : "pointer",
-            fontWeight: 600
-          }}
+          className={`${styles.rollButton} ${(isRolling || !hasAnySelected) ? styles.rollButtonDisabled : ""}`.trim()}
         >
           {isRolling ? "Rolling..." : "Let's go gambling!"}
         </button>

@@ -1,5 +1,12 @@
 :root {
   --font: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+
+  --table-surface: #0b0b0b;
+  --table-header: #141414;
+  --table-border: #262626;
+  --table-row-hover: #101010;
+  --table-text: #ffffff;
+  --table-muted: #a3a3a3;
 }
 
 html, body {
@@ -27,3 +34,48 @@ label { display: grid; gap: 6px; }
 input { padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
 button { padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; background: white; cursor: pointer; }
 button:hover { background: #f3f3f3; }
+
+/* Tables */
+table { border-collapse: collapse; width: 100%; color: var(--table-text); }
+th, td { padding: 8px; border-bottom: 1px solid var(--table-border); vertical-align: top; }
+th { text-align: left; background: var(--table-header); font-weight: 700; }
+tbody tr:hover { background: var(--table-row-hover); }
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--table-border);
+  border-radius: 8px;
+  background: var(--table-surface);
+}
+
+.table-compact th,
+.table-compact td { padding: 6px; }
+
+.table-right { text-align: right; }
+.font-tabular { font-variant-numeric: tabular-nums; }
+
+.table-sticky-left {
+  position: sticky;
+  left: 0;
+  background: var(--table-header);
+  z-index: 2;
+}
+
+.table-sticky-left-cell {
+  position: sticky;
+  left: 0;
+  background: var(--table-surface);
+  z-index: 1;
+  font-weight: 600;
+}
+
+.table-col-min-220 { min-width: 220px; }
+
+.text-muted { color: var(--table-muted); }
+.text-status-beaten { color: #4ade80; }
+.text-status-givenup { color: #f87171; }
+.text-status-unbeaten { color: #d4d4d4; }
+
+.cell-stack { display: grid; gap: 4px; }
+.cell-title { font-weight: 600; }
+.cell-subtitle { font-size: 12px; }
