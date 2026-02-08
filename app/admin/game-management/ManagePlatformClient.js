@@ -22,49 +22,121 @@ export default function ManagePlatformClient({ platforms }) {
     return platforms.find(p => p.id === selectedOption.value) || null;
   }, [platforms, selectedOption]);
 
-  function handleSync() {
+  function runEventSource(url, { onEvent } = {}) {
+    return new Promise((resolve, reject) => {
+      const es = new EventSource(url);
+
+      function safeJsonParse(text) {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      }
+
+      function cleanup() {
+        es.close();
+      }
+
+      es.addEventListener('total', (evt) => {
+        const data = safeJsonParse(evt.data);
+        if (data) onEvent?.('total', data);
+      });
+
+      es.addEventListener('progress', (evt) => {
+        const data = safeJsonParse(evt.data);
+        if (data) onEvent?.('progress', data);
+      });
+
+      es.addEventListener('clear-progress', (evt) => {
+        const data = safeJsonParse(evt.data);
+        if (data) onEvent?.('clear-progress', data);
+      });
+
+      es.addEventListener('clear-done', (evt) => {
+        const data = safeJsonParse(evt.data);
+        if (data) onEvent?.('clear-done', data);
+      });
+
+      es.addEventListener('done', (evt) => {
+        const data = safeJsonParse(evt.data);
+        cleanup();
+        resolve(data || {});
+      });
+
+      es.addEventListener('error', (evt) => {
+        const data = safeJsonParse(evt.data);
+        cleanup();
+        reject(new Error(data?.message || 'Sync error'));
+      });
+
+      es.onerror = () => {
+        cleanup();
+        reject(
+          new Error(
+            'Sync connection failed. Check DevTools → Network for the /stream request status, and check Vercel function logs for details.'
+          )
+        );
+      };
+    });
+  }
+
+  async function handleSync() {
     if (!selected) return;
     setLoading(true);
     setError(null);
-    setResult({ processed: 0, inserted: 0, updated: 0 });
+    setResult({ processed: 0, inserted: 0, updated: 0, chunk: null });
 
-    const es = new EventSource(`/api/admin/igdb/sync-games/${selected.igdbId}/stream`);
-    function cleanup() {
-      es.close();
+    // Smaller chunks for Vercel Hobby.
+    const pageSize = 100;
+    const maxPages = 1;
+    let currentOffset = 0;
+
+    try {
+      while (true) {
+        const url = `/api/admin/igdb/sync-games/${selected.igdbId}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
+        const done = await runEventSource(url, {
+          onEvent: (type, data) => {
+            if (type === 'total') {
+              setResult((prev) => ({ ...(prev || {}), total: data.total }));
+            }
+            if (type === 'progress') {
+              setResult((prev) => ({
+                ...(prev || {}),
+                chunk: {
+                  page: data.page,
+                  processed: data.processed,
+                  inserted: data.inserted,
+                  updated: data.updated,
+                  pageCount: data.pageCount,
+                  offset: data.offset,
+                  pageSize: data.pageSize,
+                  total: data.total
+                }
+              }));
+            }
+          }
+        });
+
+        if (done?.phase === 'sync') {
+          setResult((prev) => ({
+            ...(prev || {}),
+            processed: (prev?.processed || 0) + (done.processed || 0),
+            inserted: (prev?.inserted || 0) + (done.inserted || 0),
+            updated: (prev?.updated || 0) + (done.updated || 0),
+            total: typeof done.total === 'number' ? done.total : prev?.total,
+            chunk: null
+          }));
+        }
+
+        if (!done?.hasMore || typeof done?.nextOffset !== 'number') break;
+        currentOffset = done.nextOffset;
+      }
+    } catch (e) {
+      setError(e?.message || 'Sync error');
+    } finally {
       setLoading(false);
     }
-
-    es.addEventListener('progress', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setResult(prev => ({ ...prev, ...data }));
-      } catch {}
-    });
-
-    es.addEventListener('total', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setResult(prev => ({ ...prev, total: data.total }));
-      } catch {}
-    });
-
-    es.addEventListener('done', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setResult(prev => ({ ...prev, ...data }));
-      } catch {}
-      cleanup();
-    });
-
-    es.addEventListener('error', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setError(data?.message || 'Sync error');
-      } catch {
-        setError('Sync error');
-      }
-      cleanup();
-    });
   }
 
   function handleResyncClearFirst() {
@@ -73,65 +145,115 @@ export default function ManagePlatformClient({ platforms }) {
     setAckClear(false);
   }
 
-  function startClearThenSync() {
+  async function startClearThenSync() {
     if (!selected) return;
     setShowConfirm(false);
     setAckClear(false);
     setLoading(true);
     setError(null);
-    setResult({ processed: 0, inserted: 0, updated: 0, clear: { total: 0, processed: 0, disconnected: 0, deleted: 0 } });
 
-    const es = new EventSource(`/api/admin/igdb/sync-games/${selected.igdbId}/stream?clear=true`);
-    function cleanup() {
-      es.close();
+    setResult({
+      processed: 0,
+      inserted: 0,
+      updated: 0,
+      chunk: null,
+      clear: { processed: 0, disconnected: 0, deleted: 0, nextCursor: null, done: false, lastBatchSize: 0 }
+    });
+
+    const clearBatchSize = 50;
+    let cursor = null;
+
+    try {
+      // Clear in chunks first
+      while (true) {
+        const url = `/api/admin/igdb/sync-games/${selected.igdbId}/stream?clear=true&clearBatchSize=${clearBatchSize}${cursor ? `&clearCursor=${encodeURIComponent(cursor)}` : ''}`;
+        const done = await runEventSource(url, {
+          onEvent: (type, data) => {
+            if (type === 'clear-progress') {
+              setResult((prev) => ({
+                ...(prev || {}),
+                clear: {
+                  ...(prev?.clear || {}),
+                  lastBatchSize: data.batchSize ?? prev?.clear?.lastBatchSize ?? 0,
+                  processedInBatch: data.processed ?? prev?.clear?.processedInBatch ?? 0,
+                  disconnectedInBatch: data.disconnected ?? prev?.clear?.disconnectedInBatch ?? 0,
+                  deletedInBatch: data.deleted ?? prev?.clear?.deletedInBatch ?? 0
+                }
+              }));
+            }
+            if (type === 'clear-done') {
+              setResult((prev) => ({
+                ...(prev || {}),
+                clear: {
+                  ...(prev?.clear || {}),
+                  processed: (prev?.clear?.processed || 0) + (data.processed || 0),
+                  disconnected: (prev?.clear?.disconnected || 0) + (data.disconnected || 0),
+                  deleted: (prev?.clear?.deleted || 0) + (data.deleted || 0),
+                  nextCursor: data.nextCursor ?? null,
+                  done: !!data.done,
+                  lastBatchSize: data.batchSize ?? prev?.clear?.lastBatchSize ?? 0
+                }
+              }));
+            }
+          }
+        });
+
+        const clear = done?.clear;
+        if (!clear) break;
+        if (clear.done) break;
+        cursor = clear.nextCursor || null;
+        if (!cursor) break;
+      }
+
+      // Then sync in chunks
+      const pageSize = 100;
+      const maxPages = 1;
+      let currentOffset = 0;
+
+      while (true) {
+        const url = `/api/admin/igdb/sync-games/${selected.igdbId}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
+        const done = await runEventSource(url, {
+          onEvent: (type, data) => {
+            if (type === 'total') {
+              setResult((prev) => ({ ...(prev || {}), total: data.total }));
+            }
+            if (type === 'progress') {
+              setResult((prev) => ({
+                ...(prev || {}),
+                chunk: {
+                  page: data.page,
+                  processed: data.processed,
+                  inserted: data.inserted,
+                  updated: data.updated,
+                  pageCount: data.pageCount,
+                  offset: data.offset,
+                  pageSize: data.pageSize,
+                  total: data.total
+                }
+              }));
+            }
+          }
+        });
+
+        if (done?.phase === 'sync') {
+          setResult((prev) => ({
+            ...(prev || {}),
+            processed: (prev?.processed || 0) + (done.processed || 0),
+            inserted: (prev?.inserted || 0) + (done.inserted || 0),
+            updated: (prev?.updated || 0) + (done.updated || 0),
+            total: typeof done.total === 'number' ? done.total : prev?.total,
+            chunk: null
+          }));
+        }
+
+        if (!done?.hasMore || typeof done?.nextOffset !== 'number') break;
+        currentOffset = done.nextOffset;
+      }
+    } catch (e) {
+      setError(e?.message || 'Sync error');
+    } finally {
       setLoading(false);
     }
-
-    es.addEventListener('clear-progress', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setResult(prev => ({ ...(prev || {}), clear: { ...(prev?.clear || {}), ...data } }));
-      } catch {}
-    });
-
-    es.addEventListener('clear-done', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setResult(prev => ({ ...(prev || {}), clear: { ...(prev?.clear || {}), ...data, done: true } }));
-      } catch {}
-    });
-
-    es.addEventListener('progress', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setResult(prev => ({ ...(prev || {}), ...data }));
-      } catch {}
-    });
-
-    es.addEventListener('total', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setResult(prev => ({ ...(prev || {}), total: data.total }));
-      } catch {}
-    });
-
-    es.addEventListener('done', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setResult(prev => ({ ...(prev || {}), ...data }));
-      } catch {}
-      cleanup();
-    });
-
-    es.addEventListener('error', (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        setError(data?.message || 'Sync error');
-      } catch {
-        setError('Sync error');
-      }
-      cleanup();
-    });
   }
 
   return (
