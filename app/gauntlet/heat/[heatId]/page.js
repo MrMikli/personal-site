@@ -11,6 +11,40 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
+async function ensureUserCanViewGauntletDetails({ gauntletId, userId }) {
+  if (!gauntletId || !userId) return false;
+
+  const gauntlet = await prisma.gauntlet.findUnique({
+    where: { id: gauntletId },
+    select: {
+      users: { where: { id: userId }, select: { id: true } },
+      heats: { select: { endsAt: true } }
+    }
+  });
+
+  if (!gauntlet) return false;
+
+  const heats = gauntlet.heats || [];
+  const now = new Date();
+  const maxEnd = heats.reduce((max, h) => {
+    const d = h?.endsAt ? new Date(h.endsAt) : null;
+    if (!d || Number.isNaN(d.getTime())) return max;
+    return !max || d > max ? d : max;
+  }, null);
+
+  const gauntletOver = (() => {
+    if (!maxEnd) return false;
+    const endOfDay = new Date(maxEnd);
+    endOfDay.setHours(23, 59, 59, 999);
+    return now.getTime() > endOfDay.getTime();
+  })();
+
+  if (gauntletOver) return true;
+
+  const isMember = Array.isArray(gauntlet.users) && gauntlet.users.length > 0;
+  return isMember;
+}
+
 export default async function HeatGameSelectionPage({ params }) {
   noStore();
   const session = await getSession();
@@ -27,11 +61,20 @@ export default async function HeatGameSelectionPage({ params }) {
       id: true,
       order: true,
       name: true,
+      gauntletId: true,
       gauntlet: { select: { name: true } }
     }
   });
 
   if (byId) {
+    const canView = await ensureUserCanViewGauntletDetails({
+      gauntletId: byId.gauntletId,
+      userId: session.user.id
+    });
+    if (!canView) {
+      redirect("/gauntlet");
+    }
+
     const slug = makeHeatSlug({
       gauntletName: byId.gauntlet?.name || "gauntlet",
       heatName: byId.name || `Heat ${byId.order}`,
@@ -87,6 +130,14 @@ export default async function HeatGameSelectionPage({ params }) {
   });
 
   if (!heat) {
+    redirect("/gauntlet");
+  }
+
+  const canView = await ensureUserCanViewGauntletDetails({
+    gauntletId: heat.gauntletId,
+    userId: session.user.id
+  });
+  if (!canView) {
     redirect("/gauntlet");
   }
 

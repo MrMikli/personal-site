@@ -142,6 +142,17 @@ export async function POST(request, { params }) {
 
   // Find or create signup for this user
   const userId = session.user.id;
+
+  // Ensure gauntlet membership is established (back-compat + consistency).
+  try {
+    await prisma.gauntlet.update({
+      where: { id: heat.gauntletId },
+      data: { users: { connect: { id: userId } } }
+    });
+  } catch (_e) {
+    // ignore (already connected or gauntlet missing)
+  }
+
   let signup = await prisma.heatSignup.findUnique({
     where: {
       heatId_userId: { heatId, userId }

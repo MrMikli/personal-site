@@ -85,3 +85,46 @@
 .actionButtonDim {
   opacity: 0.7;
 }
+
+.joinGate {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px dashed #d1d5db;
+  background: #fafafa;
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+}
+
+.joinGateTitle {
+  font-weight: 700;
+  color: #111827;
+}
+
+.joinGateBody {
+  font-size: 13px;
+  color: #374151;
+}
+
+.joinGateError {
+  font-size: 13px;
+  color: #b91c1c;
+}
+
+.joinGateButton {
+  justify-self: start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #1976d2;
+  background: #1976d2;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.joinGateButton:disabled {
+  opacity: 0.7;
+  cursor: default;
+}

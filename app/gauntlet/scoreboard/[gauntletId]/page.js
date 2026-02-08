@@ -94,6 +94,28 @@ export default async function ScoreboardPage({ params }) {
 
   const heats = gauntlet.heats || [];
 
+  // Gauntlet is considered "over" once the end date of the last heat has concluded.
+  const now = new Date();
+  const maxEnd = heats.reduce((max, h) => {
+    const d = h.endsAt ? new Date(h.endsAt) : null;
+    if (!d || Number.isNaN(d.getTime())) return max;
+    return !max || d > max ? d : max;
+  }, null);
+  const gauntletOver = (() => {
+    if (!maxEnd) return false;
+    const endOfDay = new Date(maxEnd);
+    endOfDay.setHours(23, 59, 59, 999);
+    return now.getTime() > endOfDay.getTime();
+  })();
+
+  // For current/upcoming gauntlets, require explicit membership to see details.
+  if (!gauntletOver) {
+    const isMember = (gauntlet.users || []).some((u) => String(u.id) === String(session.user.id));
+    if (!isMember) {
+      redirect("/gauntlet");
+    }
+  }
+
   const participantsById = new Map();
 
   // Include all gauntlet participants (even if they haven't signed up for a heat yet)
@@ -141,20 +163,6 @@ export default async function ScoreboardPage({ params }) {
     if (b.points !== a.points) return b.points - a.points;
     return String(a.username || "").localeCompare(String(b.username || ""));
   });
-
-  // Gauntlet is considered "over" once the end date of the last heat has concluded.
-  const now = new Date();
-  const maxEnd = heats.reduce((max, h) => {
-    const d = h.endsAt ? new Date(h.endsAt) : null;
-    if (!d || Number.isNaN(d.getTime())) return max;
-    return !max || d > max ? d : max;
-  }, null);
-  const gauntletOver = (() => {
-    if (!maxEnd) return false;
-    const endOfDay = new Date(maxEnd);
-    endOfDay.setHours(23, 59, 59, 999);
-    return now.getTime() > endOfDay.getTime();
-  })();
 
   const maxPoints = participants.length ? participants[0].points : 0;
   const topCount = participants.filter((p) => p.points === maxPoints).length;

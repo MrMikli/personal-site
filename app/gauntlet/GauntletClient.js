@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./GauntletClient.module.css";
 import { makeHeatSlug } from "@/lib/slug";
+import next from "next";
 
 function formatDate(d) {
   if (!d) return "";
@@ -33,6 +34,10 @@ const STATUS_OPTIONS = [
   { value: "GIVEN_UP", label: "Given up" }
 ];
 
+function isTerminalStatus(status) {
+  return status === "BEATEN" || status === "GIVEN_UP";
+}
+
 export default function GauntletClient({ current, upcoming, previous }) {
   const router = useRouter();
 
@@ -60,10 +65,48 @@ export default function GauntletClient({ current, upcoming, previous }) {
     return "";
   });
 
+  const [joinedByGauntletId, setJoinedByGauntletId] = useState(() => {
+    const pairs = [];
+    for (const g of [...(current || []), ...(upcoming || []), ...(previous || [])]) {
+      if (g && g.id) pairs.push([g.id, !!g.joined]);
+    }
+    return Object.fromEntries(pairs);
+  });
+
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState("");
+
   const selectedGauntlet = useMemo(
     () => listForSection.find((g) => g.id === selectedGauntletId) || listForSection[0] || null,
     [listForSection, selectedGauntletId]
   );
+
+  const isPreviousSection = selectedSection === "previous";
+  const selectedIsJoined = selectedGauntlet
+    ? (joinedByGauntletId[selectedGauntlet.id] ?? !!selectedGauntlet.joined)
+    : false;
+  const canViewDetails = isPreviousSection || selectedIsJoined;
+
+  async function handleJoinSelectedGauntlet() {
+    if (!selectedGauntlet?.id) return;
+    setJoinError("");
+    setIsJoining(true);
+    try {
+      const res = await fetch(`/api/gauntlet/join/${selectedGauntlet.id}`, {
+        method: "POST"
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || `Failed to join (HTTP ${res.status})`);
+      }
+      setJoinedByGauntletId((prev) => ({ ...prev, [selectedGauntlet.id]: true }));
+      router.refresh();
+    } catch (e) {
+      setJoinError(String(e?.message || e));
+    } finally {
+      setIsJoining(false);
+    }
+  }
 
   function switchSection(section) {
     setSelectedSection(section);
@@ -77,7 +120,24 @@ export default function GauntletClient({ current, upcoming, previous }) {
 
   const [statusByHeatId, setStatusByHeatId] = useState({});
 
-  async function handleStatusChange(heatId, nextStatus) {
+  async function handleStatusChange({ heatId, nextStatus, prevStatus, heatName, gameName }) {
+    if (!heatId) return;
+    if (isTerminalStatus(prevStatus)) return;
+
+    if (isTerminalStatus(nextStatus)) {
+      const label = nextStatus === "BEATEN" ? "beaten" : "given up on";
+      const target = gameName ? `\"${gameName}\"` : "this game";
+      const inHeat = heatName ? ` for ${heatName}` : "";
+      
+      if(nextStatus === "BEATEN") {
+        const confirmed = window.confirm(`Are you sure you want to mark ${target} as ${label}${inHeat}? This indicates you've been a God Gamer. You won't be able to change this status later.`);
+        if (!confirmed) return;
+      }
+      if(nextStatus === "GIVEN_UP") {
+        const confirmed = window.confirm(`Are you sure you want to mark ${target} as ${label}${inHeat}? This indicates you're a fucking loser. You won't be able to change this status later.`);
+      }
+    }
+
     setStatusByHeatId((prev) => ({ ...prev, [heatId]: nextStatus }));
     try {
       const res = await fetch(`/api/gauntlet/heats/${heatId}/status`, {
@@ -85,18 +145,19 @@ export default function GauntletClient({ current, upcoming, previous }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus })
       });
-      if (!res.ok) {
-        // revert on error
-        setStatusByHeatId((prev) => {
-          const clone = { ...prev };
-          delete clone[heatId];
-          return clone;
-        });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message || "Failed to set status");
+      if (json?.status && typeof json.status === "string") {
+        setStatusByHeatId((prev) => ({ ...prev, [heatId]: json.status }));
       }
     } catch (_e) {
       setStatusByHeatId((prev) => {
         const clone = { ...prev };
-        delete clone[heatId];
+        if (typeof prevStatus === "string") {
+          clone[heatId] = prevStatus;
+        } else {
+          delete clone[heatId];
+        }
         return clone;
       });
     }
@@ -155,9 +216,15 @@ export default function GauntletClient({ current, upcoming, previous }) {
             <div className={styles.card}>
               <h3 className={styles.cardTitle}>{selectedGauntlet.name}</h3>
               <div className={styles.cardSub}>
-                <Link href={`/gauntlet/scoreboard/${selectedGauntlet.id}`}>
-                  View scoreboard →
-                </Link>
+                {canViewDetails ? (
+                  <Link href={`/gauntlet/scoreboard/${selectedGauntlet.id}`}>
+                    View scoreboard →
+                  </Link>
+                ) : (
+                  <span className={styles.mutedItalic}>
+                    Join to view heats and scoreboard.
+                  </span>
+                )}
                 {selectedGauntlet.winner && selectedGauntlet.winner.usernames && (
                   <div className={styles.winnerLine}>
                     <strong>
@@ -172,7 +239,25 @@ export default function GauntletClient({ current, upcoming, previous }) {
                   </div>
                 )}
               </div>
-              {selectedGauntlet.heats.length === 0 ? (
+              {!canViewDetails ? (
+                <div className={styles.joinGate}>
+                  <div className={styles.joinGateTitle}>Join Gauntlet</div>
+                  <div className={styles.joinGateBody}>
+                    You must join this gauntlet before you can view the heat overview table.
+                  </div>
+                  {joinError && (
+                    <div className={styles.joinGateError}>{joinError}</div>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.joinGateButton}
+                    onClick={handleJoinSelectedGauntlet}
+                    disabled={isJoining}
+                  >
+                    {isJoining ? "Joining..." : "Join Gauntlet"}
+                  </button>
+                </div>
+              ) : selectedGauntlet.heats.length === 0 ? (
                 <p className={styles.p0}>No heats configured for this gauntlet yet.</p>
               ) : (
                 <div className="table-wrap">
@@ -194,6 +279,7 @@ export default function GauntletClient({ current, upcoming, previous }) {
                           const game = user.selectedGame || null;
                           const year = game ? getGameYear(game) : null;
                           const currentStatus = statusByHeatId[h.id] || user.status || "UNBEATEN";
+                          const statusLocked = isTerminalStatus(currentStatus);
                           const hasPool = !!(user.hasRolls || game);
                           const buttonLabel = hasPool ? "View roll pool" : "Go to game selection";
 
@@ -259,12 +345,21 @@ export default function GauntletClient({ current, upcoming, previous }) {
                               <td>
                                 <select
                                   value={currentStatus}
-                                  onChange={(e) => handleStatusChange(h.id, e.target.value)}
+                                  onChange={(e) =>
+                                    handleStatusChange({
+                                      heatId: h.id,
+                                      nextStatus: e.target.value,
+                                      prevStatus: currentStatus,
+                                      heatName: h.name || `Heat ${h.order}`,
+                                      gameName: game?.name || null
+                                    })
+                                  }
                                   disabled={
                                     isHeatOver ||
                                     isHeatNotOpenYet ||
                                     isLockedByPreviousHeat ||
-                                    !game
+                                    !game ||
+                                    statusLocked
                                   }
                                   className={styles.select}
                                 >

@@ -6,6 +6,7 @@ import { ensureHeatIsMutable } from "@/lib/heatGuards";
 export const dynamic = "force-dynamic";
 
 const ALLOWED_STATUSES = ["UNBEATEN", "BEATEN", "GIVEN_UP"];
+const TERMINAL_STATUSES = ["BEATEN", "GIVEN_UP"];
 
 export async function POST(request, { params }) {
   const session = await getSession();
@@ -32,11 +33,36 @@ export async function POST(request, { params }) {
 
   const userId = session.user.id;
 
+  // Keep gauntlet membership in sync with any participation.
+  try {
+    const heat = await prisma.heat.findUnique({
+      where: { id: heatId },
+      select: { gauntletId: true }
+    });
+    if (heat?.gauntletId) {
+      await prisma.gauntlet.update({
+        where: { id: heat.gauntletId },
+        data: { users: { connect: { id: userId } } }
+      });
+    }
+  } catch (_e) {
+    // ignore
+  }
+
   let signup = await prisma.heatSignup.findUnique({
     where: {
       heatId_userId: { heatId, userId }
     }
   });
+
+  // Once a user confirms they've beaten or given up, lock it in.
+  // Admin reset-signup is the intended escape hatch.
+  if (signup && TERMINAL_STATUSES.includes(signup.status) && signup.status !== status) {
+    return NextResponse.json(
+      { message: "Status is locked for this heat" },
+      { status: 409 }
+    );
+  }
 
   // You can't meaningfully mark a heat as beaten/given up until you've picked a game.
   // Allow UNBEATEN (default) without a selected game.

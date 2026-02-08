@@ -22,6 +22,10 @@ export default async function GauntletPage() {
   const gauntlets = await prisma.gauntlet.findMany({
     orderBy: { name: "asc" },
     include: {
+      users: {
+        where: { id: session.user.id },
+        select: { id: true }
+      },
       heats: {
         orderBy: { order: "asc" },
         include: {
@@ -207,11 +211,15 @@ export default async function GauntletPage() {
 
   for (const g of gauntlets) {
     const bucket = bucketByGauntletId.get(g.id) || "upcoming";
+    const joinedExplicit = Array.isArray(g.users) && g.users.length > 0;
+    const joinedByActivity = (g.heats || []).some((h) => (h.signups || []).length > 0);
+    const joined = joinedExplicit || joinedByActivity;
     const mapped = {
       id: g.id,
       name: g.name,
       heats: (g.heats || []).map(mapHeat),
-      winner: bucket === "previous" ? (winnerByGauntletId.get(g.id) ?? null) : null
+      winner: bucket === "previous" ? (winnerByGauntletId.get(g.id) ?? null) : null,
+      joined
     };
     if (bucket === "current") current.push(mapped);
     else if (bucket === "upcoming") upcoming.push(mapped);
