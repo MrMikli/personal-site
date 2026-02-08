@@ -4,6 +4,20 @@
   max-width: 480px;
 }
 
+.bulkBox {
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+  display: grid;
+  gap: 8px;
+}
+
+.bulkTitle {
+  font-weight: 600;
+  color: #333;
+}
+
 .label {
   display: grid;
   gap: 4px;

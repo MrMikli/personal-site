@@ -16,11 +16,22 @@ export default function ManagePlatformClient({ platforms }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [ackClear, setAckClear] = useState(false);
 
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
+  const [bulkError, setBulkError] = useState(null);
+
   const options = useMemo(() => platforms.map(p => ({ value: p.id, label: formatName(p), igdbId: p.igdbId })), [platforms]);
   const selected = useMemo(() => {
     if (!selectedOption) return null;
     return platforms.find(p => p.id === selectedOption.value) || null;
   }, [platforms, selectedOption]);
+
+  const platformsWithGames = useMemo(
+    () => platforms.filter((p) => (p?._count?.games ?? 0) > 0 && !!p.igdbId),
+    [platforms]
+  );
+
+  const anyLoading = loading || bulkLoading;
 
   function runEventSource(url, { onEvent } = {}) {
     return new Promise((resolve, reject) => {
@@ -81,29 +92,116 @@ export default function ManagePlatformClient({ platforms }) {
     });
   }
 
+  async function syncPlatformChunked(igdbId, { onEvent } = {}) {
+    // Smaller chunks for Vercel Hobby.
+    const pageSize = 100;
+    const maxPages = 1;
+    let currentOffset = 0;
+
+    const totals = { processed: 0, inserted: 0, updated: 0, total: null };
+
+    while (true) {
+      const url = `/api/admin/igdb/sync-games/${igdbId}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
+      const done = await runEventSource(url, { onEvent });
+
+      if (done?.phase === 'sync') {
+        totals.processed += done.processed || 0;
+        totals.inserted += done.inserted || 0;
+        totals.updated += done.updated || 0;
+        if (typeof done.total === 'number') totals.total = done.total;
+      }
+
+      if (!done?.hasMore || typeof done?.nextOffset !== 'number') break;
+      currentOffset = done.nextOffset;
+    }
+
+    return totals;
+  }
+
   async function handleSync() {
     if (!selected) return;
     setLoading(true);
     setError(null);
     setResult({ processed: 0, inserted: 0, updated: 0, chunk: null });
 
-    // Smaller chunks for Vercel Hobby.
-    const pageSize = 100;
-    const maxPages = 1;
-    let currentOffset = 0;
-
     try {
-      while (true) {
-        const url = `/api/admin/igdb/sync-games/${selected.igdbId}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
-        const done = await runEventSource(url, {
+      const totals = await syncPlatformChunked(selected.igdbId, {
+        onEvent: (type, data) => {
+          if (type === 'total') {
+            setResult((prev) => ({ ...(prev || {}), total: data.total }));
+          }
+          if (type === 'progress') {
+            setResult((prev) => ({
+              ...(prev || {}),
+              chunk: {
+                page: data.page,
+                processed: data.processed,
+                inserted: data.inserted,
+                updated: data.updated,
+                pageCount: data.pageCount,
+                offset: data.offset,
+                pageSize: data.pageSize,
+                total: data.total
+              }
+            }));
+          }
+        }
+      });
+
+      setResult((prev) => ({
+        ...(prev || {}),
+        processed: totals.processed,
+        inserted: totals.inserted,
+        updated: totals.updated,
+        total: typeof totals.total === 'number' ? totals.total : prev?.total,
+        chunk: null
+      }));
+    } catch (e) {
+      setError(e?.message || 'Sync error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResyncAllWithGames() {
+    if (anyLoading) return;
+    if (!platformsWithGames.length) {
+      setBulkError('No platforms with games were found to sync.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Re-sync IGDB games for all platforms that currently have games? (${platformsWithGames.length} platforms)\n\nThis is not destructive (no clear), but it may take a while.`
+    );
+    if (!confirmed) return;
+
+    setBulkLoading(true);
+    setBulkError(null);
+    setBulkResult({
+      totalPlatforms: platformsWithGames.length,
+      completedPlatforms: 0,
+      processed: 0,
+      inserted: 0,
+      updated: 0,
+      currentPlatform: null,
+      currentChunk: null,
+      errors: []
+    });
+
+    for (const p of platformsWithGames) {
+      setBulkResult((prev) => ({
+        ...(prev || {}),
+        currentPlatform: formatName(p),
+        currentChunk: null
+      }));
+
+      try {
+        const totals = await syncPlatformChunked(p.igdbId, {
           onEvent: (type, data) => {
-            if (type === 'total') {
-              setResult((prev) => ({ ...(prev || {}), total: data.total }));
-            }
             if (type === 'progress') {
-              setResult((prev) => ({
+              setBulkResult((prev) => ({
                 ...(prev || {}),
-                chunk: {
+                currentChunk: {
                   page: data.page,
                   processed: data.processed,
                   inserted: data.inserted,
@@ -118,25 +216,31 @@ export default function ManagePlatformClient({ platforms }) {
           }
         });
 
-        if (done?.phase === 'sync') {
-          setResult((prev) => ({
-            ...(prev || {}),
-            processed: (prev?.processed || 0) + (done.processed || 0),
-            inserted: (prev?.inserted || 0) + (done.inserted || 0),
-            updated: (prev?.updated || 0) + (done.updated || 0),
-            total: typeof done.total === 'number' ? done.total : prev?.total,
-            chunk: null
-          }));
-        }
-
-        if (!done?.hasMore || typeof done?.nextOffset !== 'number') break;
-        currentOffset = done.nextOffset;
+        setBulkResult((prev) => ({
+          ...(prev || {}),
+          completedPlatforms: (prev?.completedPlatforms || 0) + 1,
+          processed: (prev?.processed || 0) + (totals.processed || 0),
+          inserted: (prev?.inserted || 0) + (totals.inserted || 0),
+          updated: (prev?.updated || 0) + (totals.updated || 0),
+          currentChunk: null
+        }));
+      } catch (e) {
+        const message = e?.message || 'Sync error';
+        setBulkResult((prev) => ({
+          ...(prev || {}),
+          completedPlatforms: (prev?.completedPlatforms || 0) + 1,
+          currentChunk: null,
+          errors: [...(prev?.errors || []), { platform: formatName(p), message }]
+        }));
       }
-    } catch (e) {
-      setError(e?.message || 'Sync error');
-    } finally {
-      setLoading(false);
     }
+
+    setBulkResult((prev) => ({
+      ...(prev || {}),
+      currentPlatform: null,
+      currentChunk: null
+    }));
+    setBulkLoading(false);
   }
 
   function handleResyncClearFirst() {
@@ -258,6 +362,39 @@ export default function ManagePlatformClient({ platforms }) {
 
   return (
     <div className={styles.container}>
+      <div className={styles.bulkBox}>
+        <div className={styles.bulkTitle}>Bulk actions</div>
+        <div className={styles.buttons}>
+          <button onClick={handleResyncAllWithGames} disabled={anyLoading}>
+            {bulkLoading
+              ? 'Re-syncing all…'
+              : `Re-sync all platforms with games (${platformsWithGames.length})`}
+          </button>
+        </div>
+        {bulkResult && (
+          <div className={styles.result}>
+            <div>
+              Platforms: {bulkResult.completedPlatforms ?? 0} / {bulkResult.totalPlatforms ?? 0}
+              {bulkResult.currentPlatform ? ` (current: ${bulkResult.currentPlatform})` : ''}
+            </div>
+            <div>Processed: {bulkResult.processed ?? 0}</div>
+            <div>Inserted: {bulkResult.inserted ?? 0}</div>
+            <div>Updated: {bulkResult.updated ?? 0}</div>
+            {bulkResult.currentChunk && (
+              <div>
+                Current chunk: offset {bulkResult.currentChunk.offset ?? 0} (processed {bulkResult.currentChunk.processed ?? 0})
+              </div>
+            )}
+            {(bulkResult.errors?.length || 0) > 0 && (
+              <div>
+                Errors: {bulkResult.errors.length} (last: {bulkResult.errors[bulkResult.errors.length - 1]?.platform})
+              </div>
+            )}
+          </div>
+        )}
+        {bulkError && <div className={styles.error}>Error: {bulkError}</div>}
+      </div>
+
       <label className={styles.label}>
         <span>Select platform</span>
         <div className={styles.selectWrap}>
@@ -268,6 +405,7 @@ export default function ManagePlatformClient({ platforms }) {
             isSearchable
             placeholder="Search or select a platform"
             classNamePrefix="select"
+            isDisabled={anyLoading}
           />
         </div>
       </label>
@@ -283,11 +421,11 @@ export default function ManagePlatformClient({ platforms }) {
           </div>
 
           <div className={styles.buttons}>
-            <button onClick={handleSync} disabled={loading}>
-              {loading ? 'Syncing…' : `Sync games for ${formatName(selected || { name: 'selected platform' })}`}
+            <button onClick={handleSync} disabled={anyLoading}>
+              {anyLoading ? 'Syncing…' : `Sync games for ${formatName(selected || { name: 'selected platform' })}`}
             </button>
-            <button onClick={handleResyncClearFirst} disabled={loading}>
-              {loading ? 'Working…' : 'Re-sync (clear first)'}
+            <button onClick={handleResyncClearFirst} disabled={anyLoading}>
+              {anyLoading ? 'Working…' : 'Re-sync (clear first)'}
             </button>
           </div>
           {result && (
