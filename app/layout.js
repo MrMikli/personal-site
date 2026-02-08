@@ -3,7 +3,7 @@ import "./globals.css";
 import { getSession } from "../lib/session";
 
 export const metadata = {
-  title: "Mikli's Personal Website",
+  title: "Funny Games 1997",
   description: "Personal site with auth scaffold"
 };
 
