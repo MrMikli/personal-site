@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
 import { getSession } from "../../../../lib/session";
 import { prisma } from "@/lib/prisma";
 import HeatRollClient from "../HeatRollClient";
@@ -7,8 +8,11 @@ import styles from "./page.module.css";
 import { makeHeatSlug, parseHeatSlug, slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export default async function HeatGameSelectionPage({ params }) {
+  noStore();
   const session = await getSession();
   if (!session.user) {
     redirect("/login");
@@ -163,7 +167,9 @@ export default async function HeatGameSelectionPage({ params }) {
   return (
     <div className={styles.container}>
       <div>
-        <Link href="/gauntlet">← Back to gauntlet overview</Link>
+        <Link href="/gauntlet" prefetch={false}>
+          ← Back to gauntlet overview
+        </Link>
       </div>
       <div className={styles.center}>
         <h1 className={styles.title}>{heat.gauntlet.name}</h1>

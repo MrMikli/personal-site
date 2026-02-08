@@ -1,12 +1,16 @@
 import { redirect } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
 import { getSession } from "../../lib/session";
 import { prisma } from "@/lib/prisma";
 import GauntletClient from "./GauntletClient";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export default async function GauntletPage() {
+  noStore();
   const session = await getSession();
   if (!session.user) {
     redirect("/login");

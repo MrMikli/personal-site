@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import styles from "./GauntletClient.module.css";
 import { makeHeatSlug } from "@/lib/slug";
 
@@ -33,6 +34,14 @@ const STATUS_OPTIONS = [
 ];
 
 export default function GauntletClient({ current, upcoming, previous }) {
+  const router = useRouter();
+
+  // When navigating back/forward, Next can reuse prefetched/cached RSC payloads.
+  // Refresh on mount to ensure the table reflects the current DB state.
+  useEffect(() => {
+    router.refresh();
+  }, [router]);
+
   const [selectedSection, setSelectedSection] = useState(
     current.length ? "current" : upcoming.length ? "upcoming" : previous.length ? "previous" : "current"
   );
@@ -277,6 +286,7 @@ export default function GauntletClient({ current, upcoming, previous }) {
                                   </span>
                                 ) : (
                                   <Link
+                                    prefetch={false}
                                     href={`/gauntlet/heat/${makeHeatSlug({
                                       gauntletName: selectedGauntlet.name,
                                       heatName: h.name || `Heat ${h.order}`,

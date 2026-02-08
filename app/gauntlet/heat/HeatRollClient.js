@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import GameCard from "@/app/components/GameCard";
 import RollingWheel from "./RollingWheel";
 import styles from "./HeatRollClient.module.css";
@@ -29,6 +30,7 @@ export default function HeatRollClient({
   isHeatOver = false,
   isAdmin = false
 }) {
+  const router = useRouter();
   const [rolls, setRolls] = useState(initialRolls || []);
   const hasInitialTargets = initialTargets && Object.keys(initialTargets).length > 0;
   const [platformTargets, setPlatformTargets] = useState(
@@ -84,6 +86,43 @@ export default function HeatRollClient({
   }, [isMuted, volume]);
 
   const volumeFillClass = styles[`volumeFill${volumePct}`] || styles.volumeFill0;
+
+  // Ensure fresh server-rendered props when revisiting via back/forward.
+  useEffect(() => {
+    router.refresh();
+  }, [router]);
+
+  // If refreshed data arrives (or route cache is invalidated), resync local state.
+  useEffect(() => {
+    if (rollingRef.current || isRolling) return;
+    if (wheel || pendingRoll) return;
+
+    const nextRolls = initialRolls || [];
+    const nextHasTargets = initialTargets && Object.keys(initialTargets).length > 0;
+
+    setRolls(nextRolls);
+    setPlatformTargets(nextHasTargets ? initialTargets : {});
+    setIsLocked(nextHasTargets || nextRolls.length > 0);
+    setFinalSelectedGameId(initialSelectedGameId || null);
+    setSelectedRollId((prev) => {
+      if (!prev) return null;
+      return nextRolls.some((r) => r.id === prev) ? prev : null;
+    });
+    setWesternRequired(
+      typeof initialWesternRequired === "number" && initialWesternRequired > 0
+        ? Math.min(initialWesternRequired, defaultGameCounter)
+        : defaultGameCounter
+    );
+  }, [
+    initialRolls,
+    initialTargets,
+    initialSelectedGameId,
+    initialWesternRequired,
+    defaultGameCounter,
+    isRolling,
+    wheel,
+    pendingRoll
+  ]);
 
   async function handleRoll() {
     if (rollingRef.current || isRolling || isHeatOver) return;
