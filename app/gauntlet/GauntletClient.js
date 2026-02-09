@@ -262,7 +262,7 @@ export default function GauntletClient({ current, upcoming, previous }) {
               <h3 className={styles.cardTitle}>{selectedGauntlet.name}</h3>
               <div className={styles.cardSub}>
                 {canViewDetails ? (
-                  <Link href={`/gauntlet/scoreboard/${selectedGauntlet.id}`}>
+                  <Link href={`/gauntlet/scoreboard/${selectedGauntlet.id}?from=gauntlet`}>
                     View scoreboard →
                   </Link>
                 ) : (

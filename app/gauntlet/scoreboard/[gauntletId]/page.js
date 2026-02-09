@@ -44,7 +44,7 @@ function TrophyIcon({ className }) {
   );
 }
 
-export default async function ScoreboardPage({ params }) {
+export default async function ScoreboardPage({ params, searchParams }) {
   const session = await getSession();
   if (!session?.user) {
     redirect("/login");
@@ -173,9 +173,11 @@ export default async function ScoreboardPage({ params }) {
 
   return (
     <div className={styles.container}>
-      <div>
-        <Link href="/gauntlet">← Back to gauntlet</Link>
-      </div>
+      {searchParams?.from === "gauntlet" ? (
+        <div>
+          <Link href="/gauntlet">← Back to gauntlet overview</Link>
+        </div>
+      ) : null}
 
       <div className={styles.center}>
         <h1 className={styles.title}>{gauntlet.name} - Scoreboard</h1>

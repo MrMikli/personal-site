@@ -120,9 +120,11 @@ export default async function UserRollsPage({ params, searchParams }) {
 
   return (
     <div className={styles.container}>
-      <div>
-        <Link href="/gauntlet">← Back to gauntlet</Link>
-      </div>
+      {gauntletIdParam ? (
+        <div>
+          <Link href={`/gauntlet/scoreboard/${encodeURIComponent(gauntletIdParam)}`}>← Back to scoreboard</Link>
+        </div>
+      ) : null}
       <UserRollsClient user={viewedUser} gauntlets={shapedGauntlets} initialGauntletId={initialGauntletId} />
     </div>
   );
