@@ -8,7 +8,16 @@ import { sessionOptions } from '@/lib/session';
 
 const RegisterSchema = z.object({
   username: z.string().min(3).max(32),
-  password: z.string().min(8).max(72)
+  password: z.string().min(8).max(72),
+  confirmPassword: z.string().min(8).max(72)
+}).superRefine((val, ctx) => {
+  if (val.password !== val.confirmPassword) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Passwords do not match',
+      path: ['confirmPassword']
+    });
+  }
 });
 
 export async function POST(request) {

@@ -7,18 +7,25 @@ export default function RegisterPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e) {
     e.preventDefault();
     setError('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, confirmPassword })
       });
       if (res.ok) {
         router.push('/');
@@ -43,6 +50,16 @@ export default function RegisterPage() {
         <label>
           Password (min 8 chars)
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
+        </label>
+        <label>
+          Confirm password
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={e => setConfirmPassword(e.target.value)}
+            required
+            minLength={8}
+          />
         </label>
         {error && <p className={styles.error}>{error}</p>}
         <button disabled={loading} type="submit">{loading ? 'Creating…' : 'Create account'}</button>
