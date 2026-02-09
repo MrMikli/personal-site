@@ -6,6 +6,7 @@ export default function UsersList() {
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deletingUserId, setDeletingUserId] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -43,6 +44,33 @@ export default function UsersList() {
     }
   }
 
+  async function deleteUser(user) {
+    if (!user?.id) return;
+    setError('');
+
+    const ok = confirm(
+      `Delete user "${user.username}"? This will also remove any gauntlet/heat signups and rolls for this user.`
+    );
+    if (!ok) return;
+
+    const prev = users.slice();
+    setDeletingUserId(user.id);
+    setUsers(prev.filter(u => u.id !== user.id));
+
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Delete failed');
+    } catch (e) {
+      setError(e.message);
+      setUsers(prev);
+    } finally {
+      setDeletingUserId(null);
+    }
+  }
+
   return (
     <div>
       {loading && <p>Loading users…</p>}
@@ -55,6 +83,7 @@ export default function UsersList() {
               <tr>
                 <th>Username</th>
                 <th>Admin</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -67,9 +96,20 @@ export default function UsersList() {
                         type="checkbox"
                         checked={u.isAdmin}
                         onChange={e => toggle(u.username, e.target.checked)}
+                        disabled={deletingUserId === u.id}
                       />
                       {u.isAdmin ? 'Yes' : 'No'}
                     </label>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className={styles.dangerButton}
+                      onClick={() => deleteUser(u)}
+                      disabled={deletingUserId === u.id}
+                    >
+                      {deletingUserId === u.id ? 'Deleting…' : 'Delete'}
+                    </button>
                   </td>
                 </tr>
               ))}

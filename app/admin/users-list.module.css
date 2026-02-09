@@ -7,3 +7,18 @@
   gap: 8px;
   align-items: center;
 }
+
+.dangerButton {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #ef4444;
+  background: transparent;
+  color: #b91c1c;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dangerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
