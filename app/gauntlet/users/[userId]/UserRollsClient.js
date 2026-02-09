@@ -1,14 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { formatDateOnlyUTC } from "@/lib/dateOnly";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import styles from "./page.module.css";
 
 function formatDate(d) {
-  if (!d) return "";
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return "";
-  return dt.toLocaleDateString();
+  return formatDateOnlyUTC(d);
 }
 
 function getGameYear(game) {

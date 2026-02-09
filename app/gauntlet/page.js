@@ -4,6 +4,7 @@ import { getSession } from "../../lib/session";
 import { prisma } from "@/lib/prisma";
 import GauntletClient from "./GauntletClient";
 import styles from "./page.module.css";
+import { getUtcDayBoundsMs } from "@/lib/dateOnly";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -16,8 +17,11 @@ export default async function GauntletPage() {
     redirect("/login");
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const nowMs = Date.now();
+  const todayUtcMs = (() => {
+    const now = new Date(nowMs);
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0);
+  })();
 
   const gauntlets = await prisma.gauntlet.findMany({
     orderBy: { name: "asc" },
@@ -144,12 +148,12 @@ export default async function GauntletPage() {
 
     if (!minStart || !maxEnd) return "upcoming";
 
-    const todayTime = today.getTime();
-    const startTime = minStart.setHours(0, 0, 0, 0);
-    const endTime = maxEnd.setHours(23, 59, 59, 999);
+    const startBounds = getUtcDayBoundsMs(minStart);
+    const endBounds = getUtcDayBoundsMs(maxEnd);
+    if (!startBounds || !endBounds) return "upcoming";
 
-    if (todayTime < startTime) return "upcoming";
-    if (todayTime > endTime) return "previous";
+    if (todayUtcMs < startBounds.start) return "upcoming";
+    if (todayUtcMs > endBounds.end) return "previous";
     return "current";
   }
 

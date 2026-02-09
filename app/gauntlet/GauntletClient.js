@@ -4,13 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./GauntletClient.module.css";
 import { makeHeatSlug } from "@/lib/slug";
-import next from "next";
+import { addUtcDaysMs, formatDateOnlyUTC, getUtcDayBoundsMs } from "@/lib/dateOnly";
 
 function formatDate(d) {
-  if (!d) return "";
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return "";
-  return dt.toLocaleDateString();
+  return formatDateOnlyUTC(d);
 }
 
 function getGameYear(game) {
@@ -28,6 +25,19 @@ function getGameYear(game) {
   return null;
 }
 
+function formatLocalDateTime(ms) {
+  if (ms == null) return "";
+  const dt = new Date(ms);
+  if (Number.isNaN(dt.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(dt);
+}
+
 const STATUS_OPTIONS = [
   { value: "UNBEATEN", label: "Unbeaten" },
   { value: "BEATEN", label: "Beaten" },
@@ -40,6 +50,40 @@ function isTerminalStatus(status) {
 
 export default function GauntletClient({ current, upcoming, previous }) {
   const router = useRouter();
+
+  const utcOffsetLabel = useMemo(() => {
+    const now = new Date();
+    const offsetMinutes = -now.getTimezoneOffset();
+    const absMinutes = Math.abs(offsetMinutes);
+    const hours = Math.floor(absMinutes / 60);
+    const minutes = absMinutes % 60;
+
+    const sign = offsetMinutes === 0 ? "±" : offsetMinutes > 0 ? "+" : "-";
+    const hh = String(hours).padStart(2, "0");
+    const mm = String(minutes).padStart(2, "0");
+    const utc = sign === "±" ? "UTC" : `UTC${sign}${hh}:${mm}`;
+
+    const todayUtcDayEndMs = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      23,
+      59,
+      59,
+      999
+    );
+    const local = formatLocalDateTime(todayUtcDayEndMs);
+
+    if (offsetMinutes === 0) {
+      return { utc, relation: "the same as UTC", local };
+    }
+
+    const relation = offsetMinutes > 0
+      ? `${hours}${minutes ? `:${String(minutes).padStart(2, "0")}` : ""} hour${hours === 1 && minutes === 0 ? "" : "s"} ahead of UTC`
+      : `${hours}${minutes ? `:${String(minutes).padStart(2, "0")}` : ""} hour${hours === 1 && minutes === 0 ? "" : "s"} behind UTC`;
+
+    return { utc, relation, local };
+  }, []);
 
   // When navigating back/forward, Next can reuse prefetched/cached RSC payloads.
   // Refresh on mount to ensure the table reflects the current DB state.
@@ -135,6 +179,7 @@ export default function GauntletClient({ current, upcoming, previous }) {
       }
       if(nextStatus === "GIVEN_UP") {
         const confirmed = window.confirm(`Are you sure you want to mark ${target} as ${label}${inHeat}? This indicates you're a fucking loser. You won't be able to change this status later.`);
+        if (!confirmed) return;
       }
     }
 
@@ -260,20 +305,21 @@ export default function GauntletClient({ current, upcoming, previous }) {
               ) : selectedGauntlet.heats.length === 0 ? (
                 <p className={styles.p0}>No heats configured for this gauntlet yet.</p>
               ) : (
-                <div className="table-wrap">
-                <table className="table-compact">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>Platforms</th>
-                      <th>Your game</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <>
+                  <div className="table-wrap">
+                  <table className="table-compact">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Platforms</th>
+                        <th>Your game</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
                         {selectedGauntlet.heats.map((h, index) => {
                           const user = h.user || {};
                           const game = user.selectedGame || null;
@@ -283,28 +329,14 @@ export default function GauntletClient({ current, upcoming, previous }) {
                           const hasPool = !!(user.hasRolls || game);
                           const buttonLabel = hasPool ? "View roll pool" : "Go to game selection";
 
-                          const now = new Date();
-                          const startsAt = h.startsAt ? new Date(h.startsAt) : null;
-                          let isHeatNotOpenYet = false;
-                          if (startsAt && !Number.isNaN(startsAt.getTime())) {
-                            const startOfDay = new Date(startsAt);
-                            startOfDay.setHours(0, 0, 0, 0);
-                            const openAt = new Date(startOfDay);
-                            openAt.setDate(openAt.getDate() - 1);
-                            if (now.getTime() < openAt.getTime()) {
-                              isHeatNotOpenYet = true;
-                            }
-                          }
+                          const nowMs = Date.now();
+                          const startsBounds = getUtcDayBoundsMs(h.startsAt);
+                          const opensAtMs = startsBounds ? addUtcDaysMs(startsBounds.start, -1) : null;
+                          const isHeatNotOpenYet = opensAtMs != null ? nowMs < opensAtMs : false;
 
-                          const endsAt = h.endsAt ? new Date(h.endsAt) : null;
-                          let isHeatOver = false;
-                          if (endsAt && !Number.isNaN(endsAt.getTime())) {
-                            const endOfDay = new Date(endsAt);
-                            endOfDay.setHours(23, 59, 59, 999);
-                            if (now.getTime() > endOfDay.getTime()) {
-                              isHeatOver = true;
-                            }
-                          }
+                          const endsBounds = getUtcDayBoundsMs(h.endsAt);
+                          const isHeatOver = endsBounds ? nowMs > endsBounds.end : false;
+                          const endsLocalLabel = endsBounds ? formatLocalDateTime(endsBounds.end) : "";
 
                           const effectiveButtonLabel = isHeatOver ? "View roll pool" : buttonLabel;
 
@@ -326,7 +358,14 @@ export default function GauntletClient({ current, upcoming, previous }) {
                             <tr key={h.id}>
                               <td>{h.name || `Heat ${h.order}`}</td>
                               <td>{formatDate(h.startsAt)}</td>
-                              <td>{formatDate(h.endsAt)}</td>
+                              <td>
+                                <div>{formatDate(h.endsAt)}</div>
+                                {!!endsLocalLabel && (
+                                  <div className={styles.cellMeta}>
+                                    Ends {endsLocalLabel} (your time)
+                                  </div>
+                                )}
+                              </td>
                               <td>
                                 {(h.platforms || []).map((p) => p.name).join(", ")}
                               </td>
@@ -373,7 +412,7 @@ export default function GauntletClient({ current, upcoming, previous }) {
                               <td>
                                 {isHeatNotOpenYet && !isHeatOver ? (
                                   <span className={styles.mutedItalic}>
-                                    Heat not open yet - opens on {formatDate(new Date(new Date(h.startsAt).getTime() - 24 * 60 * 60 * 1000))}
+                                    Heat not open yet - opens on {opensAtMs != null ? formatDate(opensAtMs) : ""}
                                   </span>
                                 ) : isLockedByPreviousHeat && !isHeatOver ? (
                                   <span className={styles.mutedItalic}>
@@ -400,10 +439,15 @@ export default function GauntletClient({ current, upcoming, previous }) {
                             </tr>
                           );
                         })}
-                  </tbody>
-                </table>
-                </div>
-              )}
+                    </tbody>
+                  </table>
+                  </div>
+                  <p className={styles.tableDisclaimer}>
+                    Dates are shown and calculated in UTC. <br />
+                    This means an end date finishes at 23:59 UTC.
+                  </p>
+                </>
+                )}
             </div>
           )}
         </div>

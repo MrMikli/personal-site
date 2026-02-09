@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import HeatRollClient from "../HeatRollClient";
 import styles from "./page.module.css";
 import { makeHeatSlug, parseHeatSlug, slugify } from "@/lib/slug";
+import { addUtcDaysMs, formatDateOnlyUTC, getUtcDayBoundsMs } from "@/lib/dateOnly";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -25,7 +26,7 @@ async function ensureUserCanViewGauntletDetails({ gauntletId, userId }) {
   if (!gauntlet) return false;
 
   const heats = gauntlet.heats || [];
-  const now = new Date();
+  const nowMs = Date.now();
   const maxEnd = heats.reduce((max, h) => {
     const d = h?.endsAt ? new Date(h.endsAt) : null;
     if (!d || Number.isNaN(d.getTime())) return max;
@@ -34,9 +35,9 @@ async function ensureUserCanViewGauntletDetails({ gauntletId, userId }) {
 
   const gauntletOver = (() => {
     if (!maxEnd) return false;
-    const endOfDay = new Date(maxEnd);
-    endOfDay.setHours(23, 59, 59, 999);
-    return now.getTime() > endOfDay.getTime();
+    const bounds = getUtcDayBoundsMs(maxEnd);
+    if (!bounds) return false;
+    return nowMs > bounds.end;
   })();
 
   if (gauntletOver) return true;
@@ -174,29 +175,15 @@ export default async function HeatGameSelectionPage({ params }) {
   const initialSelectedGameId = signup?.selectedGameId || null;
   const initialWesternRequired = signup?.westernRequired ?? 0;
 
-  const now = new Date();
+  const nowMs2 = Date.now();
 
-  const startsAt = heat.startsAt ? new Date(heat.startsAt) : null;
-  let isHeatNotOpenYet = false;
-  let opensAtLabel = null;
-  if (startsAt && !Number.isNaN(startsAt.getTime())) {
-    const startOfDay = new Date(startsAt);
-    startOfDay.setHours(0, 0, 0, 0);
-    const openAt = new Date(startOfDay);
-    openAt.setDate(openAt.getDate() - 1);
-    isHeatNotOpenYet = now.getTime() < openAt.getTime();
-    opensAtLabel = openAt.toLocaleDateString();
-  }
+  const startsBounds = getUtcDayBoundsMs(heat.startsAt);
+  const opensAtMs = startsBounds ? addUtcDaysMs(startsBounds.start, -1) : null;
+  const isHeatNotOpenYet = opensAtMs != null ? nowMs2 < opensAtMs : false;
+  const opensAtLabel = opensAtMs != null ? formatDateOnlyUTC(opensAtMs) : null;
 
-  const endsAt = heat.endsAt ? new Date(heat.endsAt) : null;
-  let isHeatOver = false;
-  if (endsAt && !Number.isNaN(endsAt.getTime())) {
-    const endOfDay = new Date(endsAt);
-    endOfDay.setHours(23, 59, 59, 999);
-    if (now.getTime() > endOfDay.getTime()) {
-      isHeatOver = true;
-    }
-  }
+  const endsBounds = getUtcDayBoundsMs(heat.endsAt);
+  const isHeatOver = endsBounds ? nowMs2 > endsBounds.end : false;
 
   let isLockedByPreviousHeat = false;
   let previousHeatLabel = null;

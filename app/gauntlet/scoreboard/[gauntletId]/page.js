@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import styles from "./page.module.css";
+import { getUtcDayBoundsMs } from "@/lib/dateOnly";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +96,7 @@ export default async function ScoreboardPage({ params }) {
   const heats = gauntlet.heats || [];
 
   // Gauntlet is considered "over" once the end date of the last heat has concluded.
-  const now = new Date();
+  const nowMs = Date.now();
   const maxEnd = heats.reduce((max, h) => {
     const d = h.endsAt ? new Date(h.endsAt) : null;
     if (!d || Number.isNaN(d.getTime())) return max;
@@ -103,9 +104,9 @@ export default async function ScoreboardPage({ params }) {
   }, null);
   const gauntletOver = (() => {
     if (!maxEnd) return false;
-    const endOfDay = new Date(maxEnd);
-    endOfDay.setHours(23, 59, 59, 999);
-    return now.getTime() > endOfDay.getTime();
+    const bounds = getUtcDayBoundsMs(maxEnd);
+    if (!bounds) return false;
+    return nowMs > bounds.end;
   })();
 
   // For current/upcoming gauntlets, require explicit membership to see details.
