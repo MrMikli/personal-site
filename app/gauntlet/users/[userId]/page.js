@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import path from "path";
-import { access } from "fs/promises";
+import { access, readdir } from "fs/promises";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import UserRollsClient from "./UserRollsClient";
@@ -22,14 +22,55 @@ async function findUserPublicImageSrc(username) {
 
   const exts = ["png", "jpg", "jpeg", "webp", "gif", "svg"];
 
-  for (const ext of exts) {
-    const file = `${base}.${ext}`;
-    const abs = path.join(process.cwd(), "public", file);
+  // Case-insensitive match to behave consistently across Windows/Linux.
+  // Prefer extensions in the specified order.
+  const publicRoot = path.join(process.cwd(), "public");
+  const candidateByLower = new Map(
+    exts.map((ext) => {
+      const filename = `${base}.${ext}`;
+      return [filename.toLowerCase(), filename];
+    })
+  );
+
+  const dirsToCheck = [
+    { absDir: path.join(publicRoot, "users"), urlPrefix: "/users/" },
+    { absDir: publicRoot, urlPrefix: "/" }
+  ];
+
+  for (const { absDir, urlPrefix } of dirsToCheck) {
     try {
-      await access(abs);
-      return `/${encodeURIComponent(file)}`;
+      const entries = await readdir(absDir, { withFileTypes: true });
+      const present = new Map();
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const lower = entry.name.toLowerCase();
+        if (candidateByLower.has(lower) && !present.has(lower)) {
+          present.set(lower, entry.name);
+        }
+      }
+
+      for (const ext of exts) {
+        const lower = `${base}.${ext}`.toLowerCase();
+        const matchedName = present.get(lower);
+        if (matchedName) {
+          return `${urlPrefix}${encodeURIComponent(matchedName)}`;
+        }
+      }
     } catch {
-      // Not found
+      // Ignore and fall back to other dirs / direct access checks.
+    }
+  }
+
+  for (const { absDir, urlPrefix } of dirsToCheck) {
+    for (const ext of exts) {
+      const file = `${base}.${ext}`;
+      const abs = path.join(absDir, file);
+      try {
+        await access(abs);
+        return `${urlPrefix}${encodeURIComponent(file)}`;
+      } catch {
+        // Not found
+      }
     }
   }
 
