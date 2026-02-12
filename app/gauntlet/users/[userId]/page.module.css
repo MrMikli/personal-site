@@ -3,6 +3,18 @@
   gap: 16px;
 }
 
+.userImageWrap {
+  display: flex;
+  justify-content: center;
+}
+
+.userImage {
+  width: min(420px, 90vw);
+  height: auto;
+  display: block;
+  border-radius: 8px;
+}
+
 .header {
   display: grid;
   gap: 6px;

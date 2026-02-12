@@ -1,11 +1,40 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import path from "path";
+import { access } from "fs/promises";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import UserRollsClient from "./UserRollsClient";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+async function findUserPublicImageSrc(username) {
+  if (!username) return null;
+
+  // Spec: match username exactly, with spaces converted to underscores.
+  // Also guard against path separators.
+  const base = username
+    .replaceAll(" ", "_")
+    .replaceAll("/", "_")
+    .replaceAll("\\", "_");
+
+  const exts = ["png", "jpg", "jpeg", "webp", "gif", "svg"];
+
+  for (const ext of exts) {
+    const file = `${base}.${ext}`;
+    const abs = path.join(process.cwd(), "public", file);
+    try {
+      await access(abs);
+      return `/${encodeURIComponent(file)}`;
+    } catch {
+      // Not found
+    }
+  }
+
+  return null;
+}
 
 export default async function UserRollsPage({ params, searchParams }) {
   const session = await getSession();
@@ -40,6 +69,8 @@ export default async function UserRollsPage({ params, searchParams }) {
   if (!viewedUser) {
     redirect("/gauntlet");
   }
+
+  const userImageSrc = await findUserPublicImageSrc(viewedUser.username);
 
   const gauntlets = await prisma.gauntlet.findMany({
     where: {
@@ -123,6 +154,11 @@ export default async function UserRollsPage({ params, searchParams }) {
       {gauntletIdParam ? (
         <div>
           <Link href={`/gauntlet/scoreboard/${encodeURIComponent(gauntletIdParam)}`}>← Back to scoreboard</Link>
+        </div>
+      ) : null}
+      {userImageSrc ? (
+        <div className={styles.userImageWrap}>
+          <img className={styles.userImage} src={userImageSrc} alt={viewedUser.username} />
         </div>
       ) : null}
       <UserRollsClient user={viewedUser} gauntlets={shapedGauntlets} initialGauntletId={initialGauntletId} />
