@@ -72,12 +72,20 @@ export default function RulesPage() {
                 </ol>
                 In either case, make sure to confirm with your fellow gauntlet participants. <br />
                 Otherwise you must play that game in the exact version that was rolled, whether that be on the actual console, through fan emulation or an official emulation release like Virtual Console or PlayStation Classics, etc. <br />
+                <br />
+                If you roll a collection release of games that were released individually, you get to pick any of them. For example, Duck Hunt and Super Mario Bros. were released together as a cartridge on NES, but also separately on various platforms - if you roll that combined release, you can pick either Duck Hunt or Super Mario Bros. to be your target for that heat. <br />
             </div>
+
+            <h3 className={styles.sectionTitle}>Beating a game</h3>
+            <div>
+                For most linear titles, beating the game is defined as reaching the end credits or ending screen. If there is credits to reach, that must be your objective. <br />
+                For more arcade style games that don't have any credits, you'll just have to set a goal for a high score or stage that would be widely accepted as "yeah, that bloke seems to have beaten that there videogame". Idk, you figure it out. Talk with the others and set a target.<br />
+            </div>
+
 
             <h3 className={styles.sectionTitle}>Technical Vetos</h3>
             <div>
-                It's possible to roll games that simply cannot be acquired, or don't run, or maybe aren't games or retro games
-                at all. These games can be vetoed and removed from your roll pool for free, but you must have one other gamer
+                It's possible to roll games that simply cannot be acquired, or don't run, or maybe aren't games or aren't retro. These games can be vetoed and removed from your roll pool for free, but you must have one other gamer
                 confirm it with you. <br />
                 The same goes for games that aren't available in English language. Note that you're totally allowed to try and beat a fully Japanese/Italian/German game, you just don't have to. <br />
                 You may also veto games you've already played, but you're also allowed to try and beat them again if you want. <br />

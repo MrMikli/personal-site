@@ -17,7 +17,8 @@ jest.mock("@/lib/prisma", () => ({
     gauntlet: { update: jest.fn() },
     heatSignup: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     gauntletEffect: { upsert: jest.fn() },
-    heatEffect: { create: jest.fn() }
+    heatEffect: { create: jest.fn(), deleteMany: jest.fn() },
+    $transaction: jest.fn()
   }
 }));
 
@@ -137,7 +138,9 @@ describe("/api/gauntlet/heats/[heatId]/status", () => {
       name: "Week 2",
       defaultGameCounter: 10
     });
+    prisma.heatEffect.deleteMany.mockResolvedValueOnce({ count: 0 });
     prisma.heatEffect.create.mockResolvedValueOnce({ id: "he1" });
+    prisma.$transaction.mockImplementationOnce(async (ops) => Promise.all(ops.map((op) => op)));
 
     const req = new Request("http://localhost", {
       method: "POST",
@@ -153,6 +156,10 @@ describe("/api/gauntlet/heats/[heatId]/status", () => {
       kind: "PUNISH_ROLL_POOL_MINUS_30",
       nextHeat: { id: "h2", order: 2, name: "Week 2" },
       nextRollPool: 8
+    });
+
+    expect(prisma.heatEffect.deleteMany).toHaveBeenCalledWith({
+      where: { heatId: "h2", userId: "u1", kind: "PUNISH_ROLL_POOL_MINUS_30" }
     });
   });
 });

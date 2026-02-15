@@ -5,7 +5,30 @@ import { ensureHeatIsMutable } from "@/lib/heatGuards";
 
 export const dynamic = "force-dynamic";
 
-async function getHeatPoolState({ heatId, userId, basePool }) {
+function clampPoolMinus2Delta(basePool) {
+  const base = Number(basePool);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  // Apply up to -2, but never below 1.
+  return -Math.min(2, Math.max(0, base - 1));
+}
+
+function sumPoolDeltaWithPunishClamp(effects, basePool) {
+  const rows = effects || [];
+  let other = 0;
+  let punish = 0;
+  for (const e of rows) {
+    const d = Number(e?.poolDelta) || 0;
+    if (!d) continue;
+    if (e?.kind === "PUNISH_ROLL_POOL_MINUS_30") punish += d;
+    else other += d;
+  }
+  punish = Math.min(0, punish);
+  const maxPunish = clampPoolMinus2Delta(basePool);
+  const punishClamped = Math.max(punish, maxPunish);
+  return other + punishClamped;
+}
+
+async function getHeatPoolState({ heatId, userId, basePool, gauntletId, heatOrder }) {
   const effects = await prisma.heatEffect.findMany({
     where: {
       heatId,
@@ -23,7 +46,28 @@ async function getHeatPoolState({ heatId, userId, basePool }) {
     }
   });
 
-  const poolDelta = effects.reduce((acc, e) => acc + (Number(e.poolDelta) || 0), 0);
+  let poolDelta = sumPoolDeltaWithPunishClamp(effects, basePool);
+
+  const hasStoredPunishEffect = (effects || []).some(
+    (e) => e?.kind === "PUNISH_ROLL_POOL_MINUS_30" && (Number(e?.poolDelta) || 0) < 0
+  );
+  if (!hasStoredPunishEffect && gauntletId && typeof heatOrder === "number") {
+    const prevHeat = await prisma.heat.findFirst({
+      where: { gauntletId, order: { lt: heatOrder } },
+      orderBy: { order: "desc" },
+      select: { id: true }
+    });
+    if (prevHeat?.id) {
+      const prevSignup = await prisma.heatSignup.findUnique({
+        where: { heatId_userId: { heatId: prevHeat.id, userId } },
+        select: { status: true }
+      });
+      if (prevSignup?.status === "GIVEN_UP") {
+        poolDelta += clampPoolMinus2Delta(basePool);
+      }
+    }
+  }
+
   const configuredPool = Math.max(1, Number(basePool) + poolDelta);
 
   const bonusRolls = effects.filter(
@@ -73,6 +117,7 @@ export async function POST(request, { params }) {
     select: {
       id: true,
       gauntletId: true,
+      order: true,
       defaultGameCounter: true,
       gauntlet: { select: { effectsEnabled: true } }
     }
@@ -138,7 +183,9 @@ export async function POST(request, { params }) {
     const pool = await getHeatPoolState({
       heatId,
       userId,
-      basePool: heat.defaultGameCounter
+      basePool: heat.defaultGameCounter,
+      gauntletId: heat.gauntletId,
+      heatOrder: heat.order
     });
 
     return NextResponse.json({ success: true, pool });
@@ -186,7 +233,9 @@ export async function POST(request, { params }) {
     const pool = await getHeatPoolState({
       heatId,
       userId,
-      basePool: heat.defaultGameCounter
+      basePool: heat.defaultGameCounter,
+      gauntletId: heat.gauntletId,
+      heatOrder: heat.order
     });
 
     return NextResponse.json({ success: true, pool });

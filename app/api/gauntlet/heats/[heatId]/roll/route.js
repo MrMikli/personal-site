@@ -110,8 +110,31 @@ function shuffleInPlace(array) {
   return array;
 }
 
-function sumPoolDelta(heatEffects) {
-  return (heatEffects || []).reduce((acc, e) => acc + (Number(e.poolDelta) || 0), 0);
+function clampPoolMinus2Delta(basePool) {
+  const base = Number(basePool);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  // Apply up to -2, but never below 1.
+  return -Math.min(2, Math.max(0, base - 1));
+}
+
+function sumPoolDelta(heatEffects, basePool) {
+  const effects = heatEffects || [];
+  let other = 0;
+  let punish = 0;
+
+  for (const e of effects) {
+    const d = Number(e?.poolDelta) || 0;
+    if (!d) continue;
+    if (e?.kind === "PUNISH_ROLL_POOL_MINUS_30") punish += d;
+    else other += d;
+  }
+
+  // Punishment is a one-time -2 (min pool 1). Never allow it to stack.
+  punish = Math.min(0, punish);
+  const maxPunish = clampPoolMinus2Delta(basePool);
+  const punishClamped = Math.max(punish, maxPunish);
+
+  return other + punishClamped;
 }
 
 function getBonusEffects(heatEffects) {
@@ -267,10 +290,40 @@ export async function POST(request, { params }) {
       : [];
 
     const basePool = heat.defaultGameCounter;
-    const poolDelta = effectsEnabled ? sumPoolDelta(heatEffects) : 0;
+    let virtualPunishDelta = 0;
+    if (effectsEnabled && typeof heat?.order === "number") {
+      const hasStoredPunishEffect = (heatEffects || []).some(
+        (e) => e?.kind === "PUNISH_ROLL_POOL_MINUS_30" && (Number(e?.poolDelta) || 0) < 0
+      );
+      if (!hasStoredPunishEffect) {
+        const prevHeat = await prisma.heat.findFirst({
+          where: { gauntletId: heat.gauntletId, order: { lt: heat.order } },
+          orderBy: { order: "desc" },
+          select: { id: true }
+        });
+
+        if (prevHeat?.id) {
+          const prevSignup = await prisma.heatSignup.findUnique({
+            where: { heatId_userId: { heatId: prevHeat.id, userId } },
+            select: { status: true }
+          });
+          if (prevSignup?.status === "GIVEN_UP") {
+            virtualPunishDelta = clampPoolMinus2Delta(basePool);
+          }
+        }
+      }
+    }
+
+    const poolDelta = effectsEnabled ? (sumPoolDelta(heatEffects, basePool) + virtualPunishDelta) : 0;
     const configuredPool = Math.max(1, Number(basePool) + poolDelta);
+
+    // Bonus roll tokens increase the total allowed rolls by 1 each.
+    // Importantly, once a bonus roll is consumed, the resulting BONUS roll still occupies a slot.
+    // If a player later vetoes a NORMAL roll, they should be able to refill back up to the configured
+    // pool while keeping the already-created BONUS roll.
     const bonusEffects = effectsEnabled ? getBonusEffects(heatEffects) : [];
-    const totalAllowed = configuredPool + bonusEffects.length;
+    const existingBonusRollCount = existingRolls.filter((r) => r.source === "BONUS").length;
+    const totalAllowed = configuredPool + existingBonusRollCount + bonusEffects.length;
 
     const totalExisting = existingRolls.length;
     if (totalExisting >= totalAllowed) {

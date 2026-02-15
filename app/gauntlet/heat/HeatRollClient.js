@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Joystick, GamepadDirectional, Gavel } from "lucide-react";
+import { Plus, Joystick, GamepadDirectional, Gavel, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight } from "lucide-react";
 import GameCard from "@/app/components/GameCard";
 import RollingWheel from "./RollingWheel";
 import styles from "./HeatRollClient.module.css";
@@ -34,6 +34,7 @@ export default function HeatRollClient({
   defaultGameCounter,
   configuredGameCounter,
   totalGameCounter,
+  penaltyDelta = 0,
   bonusRollsAvailable,
   platforms,
   initialRolls,
@@ -160,6 +161,49 @@ export default function HeatRollClient({
     return Array.from(counts.values());
   }, [heatEffects]);
 
+  const bonusConfigSummary = useMemo(() => {
+    const allBonus = (heatEffects || []).filter(
+      (e) => e?.kind === "REWARD_BONUS_ROLL_PLATFORM" && typeof e?.platformId === "string" && e.platformId
+    );
+
+    if (!allBonus.length) return "(none)";
+
+    const byPlatformId = new Map();
+    for (const e of allBonus) {
+      const platformId = e.platformId;
+      const platform = e?.platform || null;
+      const label = platform
+        ? (platform.abbreviation ? `${platform.name} (${platform.abbreviation})` : platform.name)
+        : platformId;
+
+      const prev = byPlatformId.get(platformId) || { label, available: 0, used: 0 };
+      const isAvailable = !e?.consumedAt && (Number(e?.remainingUses) || 0) > 0;
+      if (isAvailable) prev.available += 1;
+      else prev.used += 1;
+      byPlatformId.set(platformId, prev);
+    }
+
+    const parts = Array.from(byPlatformId.values()).map((row) => {
+      const total = row.available + row.used;
+      const countLabel = total > 1 ? ` x${total}` : "";
+      if (row.available > 0 && row.used > 0) {
+        return `${row.label}${countLabel} (${row.available} available, ${row.used} used)`;
+      }
+      if (row.available > 0) {
+        return `${row.label}${countLabel} (available)`;
+      }
+      return `${row.label}${countLabel} (used)`;
+    });
+
+    return parts.join(", ");
+  }, [heatEffects]);
+
+  const hasAnyBonusConfig = useMemo(() => {
+    return (heatEffects || []).some(
+      (e) => e?.kind === "REWARD_BONUS_ROLL_PLATFORM" && typeof e?.platformId === "string" && e.platformId
+    );
+  }, [heatEffects]);
+
   const activeEffectLines = useMemo(() => {
     const lines = [];
     if (activePoolPlus3Count > 0) {
@@ -180,6 +224,12 @@ export default function HeatRollClient({
   const [bonusRollsCount, setBonusRollsCount] = useState(
     initialBonusRollsCount
   );
+
+  const [activePenaltyDelta, setActivePenaltyDelta] = useState(Number(penaltyDelta) || 0);
+
+  useEffect(() => {
+    setActivePenaltyDelta(Number(penaltyDelta) || 0);
+  }, [penaltyDelta]);
 
   const rollingRef = useRef(false);
   const [isRolling, setIsRolling] = useState(false);
@@ -548,12 +598,25 @@ export default function HeatRollClient({
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.message || "Failed to veto reroll");
 
-      if (json?.roll) {
-        setRolls((prev) => prev.map((r) => (r.id === rollId ? json.roll : r)));
+      // Match technical veto behavior: remove from pool, then let the user roll again.
+      setRolls((prev) => prev.filter((r) => r.id !== rollId));
+      setSelectedRollId((prev) => (prev === rollId ? null : prev));
+
+      // If the vetoed roll is currently associated with the wheel UI, clear it.
+      if (pendingRoll?.id === rollId || wheelRollId === rollId) {
+        setWheel(null);
+        setPendingRoll(null);
+        setWheelRollId(null);
+        setIsRolling(false);
+        rollingRef.current = false;
       }
+
       if (typeof json?.remainingVetos === "number") {
         setInventoryByKind((prev) => ({ ...prev, REWARD_VETO_REROLL: json.remainingVetos }));
       }
+
+      // Server-side veto can refund bonus-roll tokens; refresh props to reflect immediately.
+      router.refresh();
     } catch (e) {
       setEffectsError(String(e?.message || e));
     }
@@ -697,6 +760,18 @@ export default function HeatRollClient({
         throw new Error(json?.message || "Failed to apply technical veto");
       }
       setRolls((prev) => prev.filter((r) => r.id !== rollId));
+
+      // If the vetoed roll is currently associated with the wheel UI, clear it.
+      if (pendingRoll?.id === rollId || wheelRollId === rollId) {
+        setWheel(null);
+        setPendingRoll(null);
+        setWheelRollId(null);
+        setIsRolling(false);
+        rollingRef.current = false;
+      }
+
+      // Bonus-roll deletes can refund tokens; refresh to show updated Bonus: row.
+      router.refresh();
     } catch (e) {
       setError(String(e.message || e));
     }
@@ -794,6 +869,7 @@ export default function HeatRollClient({
       setSelectedRollId(null);
       setWheel(null);
       setPendingRoll(null);
+      setHeatEffects([]);
       if (typeof window !== "undefined") {
         window.location.reload();
       }
@@ -915,6 +991,20 @@ export default function HeatRollClient({
                 )}
               </label>
             ))}
+
+            {hasAnyBonusConfig ? (
+              <div className={styles.targetRow}>
+                <span>Bonus:</span>
+                <span>{bonusConfigSummary}</span>
+              </div>
+            ) : null}
+
+            {activePenaltyDelta < 0 ? (
+              <div className={styles.targetRow}>
+                <span>Penalty:</span>
+                <span>{activePenaltyDelta} pool (from giving up previous heat)</span>
+              </div>
+            ) : null}
           </div>
           {!isLocked && (
             <div className={styles.totals}>
@@ -1195,42 +1285,45 @@ export default function HeatRollClient({
 
         {canMoveWheelNow ? (
           <div className={styles.moveWheelRow}>
-            <button
-              type="button"
-              className={styles.moveWheelButton}
-              onClick={() => handleMoveWheel(-2)}
-              disabled={!canMoveWheelDelta(-2)}
-              title="Costs 2 uses"
-            >
-              -2
-            </button>
-            <button
-              type="button"
-              className={styles.moveWheelButton}
-              onClick={() => handleMoveWheel(-1)}
-              disabled={!canMoveWheelDelta(-1)}
-              title="Costs 1 use"
-            >
-              -1
-            </button>
-            <button
-              type="button"
-              className={styles.moveWheelButton}
-              onClick={() => handleMoveWheel(1)}
-              disabled={!canMoveWheelDelta(1)}
-              title="Costs 1 use"
-            >
-              +1
-            </button>
-            <button
-              type="button"
-              className={styles.moveWheelButton}
-              onClick={() => handleMoveWheel(2)}
-              disabled={!canMoveWheelDelta(2)}
-              title="Costs 2 uses"
-            >
-              +2
-            </button>
+            <div className={styles.moveWheelLabel}>Move wheel (uses powerups):</div>
+            <div className={styles.moveWheelButtons}>
+              <button
+                type="button"
+                className={styles.moveWheelButton}
+                onClick={() => handleMoveWheel(-2)}
+                disabled={!canMoveWheelDelta(-2)}
+                title="Costs 2 uses"
+              >
+                <div><ChevronsLeft /></div>
+              </button>
+              <button
+                type="button"
+                className={styles.moveWheelButton}
+                onClick={() => handleMoveWheel(-1)}
+                disabled={!canMoveWheelDelta(-1)}
+                title="Costs 1 use"
+              >
+                <div><ChevronLeft /></div>
+              </button>
+              <button
+                type="button"
+                className={styles.moveWheelButton}
+                onClick={() => handleMoveWheel(1)}
+                disabled={!canMoveWheelDelta(1)}
+                title="Costs 1 use"
+              >
+                <div><ChevronRight /></div>
+              </button>
+              <button
+                type="button"
+                className={styles.moveWheelButton}
+                onClick={() => handleMoveWheel(2)}
+                disabled={!canMoveWheelDelta(2)}
+                title="Costs 2 uses"
+              >
+                <div><ChevronsRight /></div>
+              </button>
+            </div>
           </div>
         ) : null}
 

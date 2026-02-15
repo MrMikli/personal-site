@@ -193,18 +193,39 @@ export default async function HeatGameSelectionPage({ params }) {
       })
     : [];
 
-  const poolDelta = (heatEffects || []).reduce(
-    (acc, e) => acc + (Number(e.poolDelta) || 0),
-    0
-  );
-  const configuredGameCounter = Math.max(1, heat.defaultGameCounter + poolDelta);
+  const clampPoolMinus2Delta = (basePool) => {
+    const base = Number(basePool);
+    if (!Number.isFinite(base) || base <= 0) return 0;
+    return -Math.min(2, Math.max(0, base - 1));
+  };
+
+  let storedPunishDelta = 0;
+  let poolDelta = (() => {
+    let other = 0;
+    let punish = 0;
+    for (const e of heatEffects || []) {
+      const d = Number(e?.poolDelta) || 0;
+      if (!d) continue;
+      if (e?.kind === "PUNISH_ROLL_POOL_MINUS_30") punish += d;
+      else other += d;
+    }
+    punish = Math.min(0, punish);
+    const maxPunish = clampPoolMinus2Delta(heat.defaultGameCounter);
+    const punishClamped = Math.max(punish, maxPunish);
+    storedPunishDelta = punishClamped;
+    return other + punishClamped;
+  })();
+
+  let effectivePenaltyDelta = storedPunishDelta;
+  let configuredGameCounter = Math.max(1, heat.defaultGameCounter + poolDelta);
   const bonusRollsAvailable = (heatEffects || []).filter(
     (e) =>
       e.kind === "REWARD_BONUS_ROLL_PLATFORM" &&
       !e.consumedAt &&
       (Number(e.remainingUses) || 0) > 0
   ).length;
-  const totalGameCounter = configuredGameCounter + bonusRollsAvailable;
+  const bonusRollsRolled = (initialRolls || []).filter((r) => r?.source === "BONUS").length;
+  let totalGameCounter = configuredGameCounter + bonusRollsAvailable + bonusRollsRolled;
 
   const effectInventory = effectsEnabled
     ? await prisma.gauntletEffect.findMany({
@@ -225,6 +246,7 @@ export default async function HeatGameSelectionPage({ params }) {
 
   let isLockedByPreviousHeat = false;
   let previousHeatLabel = null;
+  let previousHeatStatus = null;
   if (!isHeatOver) {
     const prevHeat = await prisma.heat.findFirst({
       where: {
@@ -245,9 +267,26 @@ export default async function HeatGameSelectionPage({ params }) {
       });
 
       const prevStatus = prevSignup?.status || "UNBEATEN";
+      previousHeatStatus = prevStatus;
       if (prevStatus !== "BEATEN" && prevStatus !== "GIVEN_UP") {
         isLockedByPreviousHeat = true;
       }
+    }
+  }
+
+  // Fallback: if the previous heat was GIVEN_UP but the punishment row wasn't created
+  // (e.g., the next heat's pool was temporarily 1 due to earlier bugs), apply the
+  // one-time -2 penalty virtually for display.
+  const hasStoredPunishEffect = (heatEffects || []).some(
+    (e) => e?.kind === "PUNISH_ROLL_POOL_MINUS_30" && (Number(e?.poolDelta) || 0) < 0
+  );
+  if (effectsEnabled && !hasStoredPunishEffect && previousHeatStatus === "GIVEN_UP") {
+    const virtualPunishDelta = clampPoolMinus2Delta(heat.defaultGameCounter);
+    if (virtualPunishDelta) {
+      poolDelta += virtualPunishDelta;
+      effectivePenaltyDelta = virtualPunishDelta;
+      configuredGameCounter = Math.max(1, heat.defaultGameCounter + poolDelta);
+      totalGameCounter = configuredGameCounter + bonusRollsAvailable + bonusRollsRolled;
     }
   }
 
@@ -296,6 +335,7 @@ export default async function HeatGameSelectionPage({ params }) {
           defaultGameCounter={heat.defaultGameCounter}
           configuredGameCounter={configuredGameCounter}
           totalGameCounter={totalGameCounter}
+          penaltyDelta={effectivePenaltyDelta}
           bonusRollsAvailable={bonusRollsAvailable}
           platforms={heat.platforms}
           initialRolls={initialRolls}

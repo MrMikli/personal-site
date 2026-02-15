@@ -42,7 +42,26 @@ export async function DELETE(_request, { params }) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
-  await prisma.heatRoll.delete({ where: { id: rollId } });
+  await prisma.$transaction(async (tx) => {
+    await tx.heatRoll.delete({ where: { id: rollId } });
+
+    // If the deleted roll was a consumed bonus roll, refund the bonus token so the
+    // user can roll a replacement bonus on the same chosen platform.
+    if (roll.source === "BONUS" && roll.bonusHeatEffectId) {
+      await tx.heatEffect.updateMany({
+        where: {
+          id: roll.bonusHeatEffectId,
+          heatId,
+          userId: session.user.id,
+          kind: "REWARD_BONUS_ROLL_PLATFORM"
+        },
+        data: {
+          remainingUses: 1,
+          consumedAt: null
+        }
+      });
+    }
+  });
 
   return NextResponse.json({ success: true });
 }

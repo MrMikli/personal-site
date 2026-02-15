@@ -201,15 +201,27 @@ export async function POST(request, { params }) {
             const delta = clampPoolMinus2(base);
             const nextRollPool = Math.max(1, Number(base) + delta);
 
-            await prisma.heatEffect.create({
-              data: {
-                heatId: nextHeat.id,
-                userId,
-                kind: "PUNISH_ROLL_POOL_MINUS_30",
-                poolDelta: delta,
-                remainingUses: 1
-              }
-            });
+            // Punishment is one-time for the next heat. If a previous punishment exists
+            // (e.g., due to retries/double-submit or admin reset + repeat), replace it
+            // instead of stacking penalties.
+            await prisma.$transaction([
+              prisma.heatEffect.deleteMany({
+                where: {
+                  heatId: nextHeat.id,
+                  userId,
+                  kind: "PUNISH_ROLL_POOL_MINUS_30"
+                }
+              }),
+              prisma.heatEffect.create({
+                data: {
+                  heatId: nextHeat.id,
+                  userId,
+                  kind: "PUNISH_ROLL_POOL_MINUS_30",
+                  poolDelta: delta,
+                  remainingUses: 1
+                }
+              })
+            ]);
 
             punishment = {
               kind: "PUNISH_ROLL_POOL_MINUS_30",

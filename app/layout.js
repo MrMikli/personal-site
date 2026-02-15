@@ -40,10 +40,11 @@ export default async function RootLayout({ children }) {
       <body>
         <header className={styles.header}>
           <div className={styles.nav}>
-            <Link href="/">Home</Link>
-            <Link href="/roll-simulator">Roll simulator</Link>
-            {user && <Link href="/gauntlet">Retro Game Gauntlet</Link>}
-            {user?.isAdmin && <Link href="/admin">Admin</Link>}
+            <Link href="/">Home</Link> | 
+            <Link href="/roll-simulator">Roll simulator</Link> |
+            {user && <Link href="/gauntlet">RGG</Link>} |
+            {user?.isAdmin && <Link href="/admin">Admin</Link>} |
+            <Link href="/rules">RGG Rules</Link> 
           </div>
           <div className={styles.userArea}>
             {user ? (
