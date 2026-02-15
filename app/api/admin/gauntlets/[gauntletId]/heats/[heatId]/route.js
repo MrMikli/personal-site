@@ -95,12 +95,80 @@ export async function DELETE(_request, { params }) {
   }
 
   try {
-    const result = await prisma.heat.deleteMany({ where: { id: heatId, gauntletId } });
-    if (result.count === 0) {
+    const result = await prisma.$transaction(async (tx) => {
+      const heat = await tx.heat.findFirst({
+        where: { id: heatId, gauntletId },
+        select: { id: true }
+      });
+      if (!heat) {
+        return { notFound: true };
+      }
+
+      const signups = await tx.heatSignup.findMany({
+        where: { heatId },
+        select: { id: true }
+      });
+      const heatSignupIds = signups.map((s) => s.id);
+
+      const rolls = heatSignupIds.length
+        ? await tx.heatRoll.findMany({
+            where: { heatSignupId: { in: heatSignupIds } },
+            select: { id: true }
+          })
+        : [];
+      const rollIds = rolls.map((r) => r.id);
+
+      // Delete wheels first (FK -> HeatRoll)
+      const deletedWheels = rollIds.length
+        ? await tx.heatRollWheel.deleteMany({ where: { heatRollId: { in: rollIds } } })
+        : { count: 0 };
+
+      const deletedRolls = heatSignupIds.length
+        ? await tx.heatRoll.deleteMany({ where: { heatSignupId: { in: heatSignupIds } } })
+        : { count: 0 };
+
+      const deletedHeatEffects = await tx.heatEffect.deleteMany({ where: { heatId } });
+
+      const deletedSignups = await tx.heatSignup.deleteMany({ where: { heatId } });
+
+      // Clear implicit M:N heat platforms (defensive; avoids join-table constraints)
+      await tx.heat.update({
+        where: { id: heatId },
+        data: { platforms: { set: [] } },
+        select: { id: true }
+      });
+
+      const deletedHeat = await tx.heat.delete({
+        where: { id: heatId },
+        select: { id: true }
+      });
+
+      return {
+        notFound: false,
+        heat: deletedHeat,
+        deleted: {
+          heatEffects: deletedHeatEffects.count,
+          heatSignups: deletedSignups.count,
+          heatRolls: deletedRolls.count,
+          heatRollWheels: deletedWheels.count
+        }
+      };
+    });
+
+    if (result?.notFound) {
       return NextResponse.json({ message: "Heat not found" }, { status: 404 });
     }
-    return NextResponse.json({ deleted: result.count });
+
+    return NextResponse.json(result);
   } catch (e) {
-    return NextResponse.json({ message: "Failed to delete heat" }, { status: 500 });
+    console.error("Failed to delete heat", e);
+    const isProd = process.env.NODE_ENV === "production";
+    const errorMessage = e?.message ? String(e.message) : String(e);
+    return NextResponse.json(
+      {
+        message: isProd ? "Failed to delete heat" : `Failed to delete heat: ${errorMessage}`
+      },
+      { status: 500 }
+    );
   }
 }

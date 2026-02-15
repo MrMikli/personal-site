@@ -62,6 +62,15 @@ describe("/api/admin/gauntlets/[gauntletId] DELETE", () => {
       heatRoll: {
         deleteMany: jest.fn(async () => ({ count: 5 }))
       },
+      heatRollWheel: {
+        deleteMany: jest.fn(async () => ({ count: 5 }))
+      },
+      heatEffect: {
+        deleteMany: jest.fn(async () => ({ count: 3 }))
+      },
+      gauntletEffect: {
+        deleteMany: jest.fn(async () => ({ count: 7 }))
+      },
       heat: {
         deleteMany: jest.fn(async () => ({ count: 2 }))
       }
@@ -76,7 +85,14 @@ describe("/api/admin/gauntlets/[gauntletId] DELETE", () => {
     expect(json).toMatchObject({
       notFound: false,
       gauntlet: { id: "g1", name: "G" },
-      deleted: { heats: 2, heatSignups: 2, heatRolls: 5 }
+      deleted: {
+        heats: 2,
+        heatSignups: 2,
+        heatRolls: 5,
+        heatRollWheels: 5,
+        heatEffects: 3,
+        gauntletEffects: 7
+      }
     });
 
     expect(tx.gauntlet.findUnique).toHaveBeenCalledWith({
@@ -89,9 +105,19 @@ describe("/api/admin/gauntlets/[gauntletId] DELETE", () => {
       select: { id: true }
     });
 
+    expect(tx.heatRollWheel.deleteMany).toHaveBeenCalledWith({
+      where: { heatRoll: { heatSignupId: { in: ["s1", "s2"] } } }
+    });
+
     expect(tx.heatRoll.deleteMany).toHaveBeenCalledWith({
       where: { heatSignupId: { in: ["s1", "s2"] } }
     });
+
+    expect(tx.heatEffect.deleteMany).toHaveBeenCalledWith({
+      where: { heatId: { in: ["h1", "h2"] } }
+    });
+
+    expect(tx.gauntletEffect.deleteMany).toHaveBeenCalledWith({ where: { gauntletId: "g1" } });
 
     expect(tx.heatSignup.deleteMany).toHaveBeenCalledWith({
       where: { heatId: { in: ["h1", "h2"] } }

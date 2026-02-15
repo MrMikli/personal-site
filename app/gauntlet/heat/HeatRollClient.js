@@ -8,11 +8,23 @@ import styles from "./HeatRollClient.module.css";
 
 function buildInitialTargets(platforms, defaultGameCounter) {
   if (!platforms.length || defaultGameCounter <= 0) return {};
-  const base = Math.max(1, Math.floor(defaultGameCounter / platforms.length));
   const targets = {};
+
+  // If the pool is smaller than platform count, we cannot keep each >= 1.
+  // Mirror server behavior: allocate 1 to some platforms and 0 to the rest.
+  if (defaultGameCounter < platforms.length) {
+    platforms.forEach((p, idx) => {
+      targets[p.id] = idx < defaultGameCounter ? 1 : 0;
+    });
+    return targets;
+  }
+
+  const base = Math.max(1, Math.floor(defaultGameCounter / platforms.length));
   let remaining = defaultGameCounter;
   platforms.forEach((p, index) => {
-    const value = index === platforms.length - 1 ? remaining : Math.max(1, Math.min(base, remaining - (platforms.length - index - 1)));
+    const value = index === platforms.length - 1
+      ? remaining
+      : Math.max(1, Math.min(base, remaining - (platforms.length - index - 1)));
     targets[p.id] = value;
     remaining -= value;
   });
@@ -22,15 +34,75 @@ function buildInitialTargets(platforms, defaultGameCounter) {
 export default function HeatRollClient({
   heatId,
   defaultGameCounter,
+  configuredGameCounter,
+  totalGameCounter,
+  bonusRollsAvailable,
   platforms,
   initialRolls,
   initialTargets,
   initialSelectedGameId,
   initialWesternRequired = 0,
   isHeatOver = false,
-  isAdmin = false
+  isAdmin = false,
+  initialHeatEffects = [],
+  initialEffectInventory = []
 }) {
   const router = useRouter();
+
+  const [inventoryByKind, setInventoryByKind] = useState(() => {
+    const base = {
+      REWARD_ROLL_POOL_PLUS_30: 0,
+      REWARD_BONUS_ROLL_PLATFORM: 0,
+      REWARD_MOVE_WHEEL: 0,
+      REWARD_VETO_REROLL: 0
+    };
+    (initialEffectInventory || []).forEach((row) => {
+      if (!row?.kind) return;
+      base[row.kind] = Number(row.remainingUses) || 0;
+    });
+    return base;
+  });
+
+  const [heatEffects, setHeatEffects] = useState(initialHeatEffects || []);
+  const [platformOptions, setPlatformOptions] = useState([]);
+  const [bonusPlatformId, setBonusPlatformId] = useState("");
+  const [effectsError, setEffectsError] = useState("");
+
+  const [configuredPool, setConfiguredPool] = useState(
+    typeof configuredGameCounter === "number" && configuredGameCounter > 0
+      ? configuredGameCounter
+      : defaultGameCounter
+  );
+  const [totalPool, setTotalPool] = useState(
+    typeof totalGameCounter === "number" && totalGameCounter > 0
+      ? totalGameCounter
+      : (typeof configuredGameCounter === "number" && configuredGameCounter > 0
+          ? configuredGameCounter
+          : defaultGameCounter)
+  );
+  const [bonusRollsCount, setBonusRollsCount] = useState(
+    typeof bonusRollsAvailable === "number" && bonusRollsAvailable >= 0
+      ? bonusRollsAvailable
+      : 0
+  );
+
+  // Keep pool sizes in sync if the server props change (e.g., after activation + refresh).
+  useEffect(() => {
+    if (rollingRef.current || isRolling) return;
+    if (wheel || pendingRoll) return;
+    if (typeof configuredGameCounter === "number" && configuredGameCounter > 0) {
+      setConfiguredPool(configuredGameCounter);
+    }
+    if (typeof totalGameCounter === "number" && totalGameCounter > 0) {
+      setTotalPool(totalGameCounter);
+    } else if (typeof configuredGameCounter === "number" && configuredGameCounter > 0) {
+      setTotalPool(configuredGameCounter);
+    }
+    if (typeof bonusRollsAvailable === "number" && bonusRollsAvailable >= 0) {
+      setBonusRollsCount(bonusRollsAvailable);
+    }
+  }, [configuredGameCounter, totalGameCounter, bonusRollsAvailable, isRolling, wheel, pendingRoll]);
+
   const [rolls, setRolls] = useState(initialRolls || []);
   const hasInitialTargets = initialTargets && Object.keys(initialTargets).length > 0;
   const [platformTargets, setPlatformTargets] = useState(
@@ -44,8 +116,8 @@ export default function HeatRollClient({
   );
   const [westernRequired, setWesternRequired] = useState(
     typeof initialWesternRequired === "number" && initialWesternRequired > 0
-      ? Math.min(initialWesternRequired, defaultGameCounter)
-      : defaultGameCounter
+      ? Math.min(initialWesternRequired, configuredGameCounter ?? defaultGameCounter)
+      : (configuredGameCounter ?? defaultGameCounter)
   );
 
   const [isLocked, setIsLocked] = useState(
@@ -54,8 +126,8 @@ export default function HeatRollClient({
 
   useEffect(() => {
     if (isLocked) return;
-    setPlatformTargets(buildInitialTargets(platforms || [], defaultGameCounter));
-  }, [platforms, defaultGameCounter, isLocked]);
+    setPlatformTargets(buildInitialTargets(platforms || [], configuredPool));
+  }, [platforms, configuredPool, isLocked]);
 
   const totalConfigured = useMemo(
     () => Object.values(platformTargets).reduce((acc, v) => acc + (Number(v) || 0), 0),
@@ -63,9 +135,12 @@ export default function HeatRollClient({
   );
 
   const platformCount = platforms?.length || 0;
-  const maxPerPlatform = Math.max(1, defaultGameCounter - Math.max(platformCount - 1, 0));
+  const minPerPlatform = configuredPool < platformCount ? 0 : 1;
+  const maxPerPlatform = configuredPool < platformCount
+    ? Math.max(0, configuredPool)
+    : Math.max(1, configuredPool - Math.max(platformCount - 1, 0));
 
-  const configMismatch = !isLocked && totalConfigured !== defaultGameCounter;
+  const configMismatch = !isLocked && totalConfigured !== configuredPool;
 
   const [wheel, setWheel] = useState(null);
   const [pendingRoll, setPendingRoll] = useState(null);
@@ -77,7 +152,7 @@ export default function HeatRollClient({
   const rollingRef = useRef(false);
 
   const effectiveRollCount = rolls.length + (pendingRoll ? 1 : 0);
-  const rollsUsedLabel = `${effectiveRollCount} / ${defaultGameCounter} rolled`;
+  const rollsUsedLabel = `${effectiveRollCount} / ${totalPool} rolled`;
 
   const volumePct = useMemo(() => {
     const pct = isMuted ? 0 : Math.round((Number(volume) || 0) * 100);
@@ -126,15 +201,15 @@ export default function HeatRollClient({
     });
     setWesternRequired(
       typeof initialWesternRequired === "number" && initialWesternRequired > 0
-        ? Math.min(initialWesternRequired, defaultGameCounter)
-        : defaultGameCounter
+        ? Math.min(initialWesternRequired, configuredPool)
+        : configuredPool
     );
   }, [
     initialRolls,
     initialTargets,
     initialSelectedGameId,
     initialWesternRequired,
-    defaultGameCounter,
+    configuredPool,
     isRolling,
     wheel,
     pendingRoll
@@ -142,10 +217,10 @@ export default function HeatRollClient({
 
   async function handleRoll() {
     if (rollingRef.current || isRolling || isHeatOver) return;
-    if (effectiveRollCount >= defaultGameCounter) return;
+    if (effectiveRollCount >= totalPool) return;
     if (configMismatch) {
       setError(
-        `Configured total (${totalConfigured}) must equal the heat pool (${defaultGameCounter}) before rolling.`
+        `Configured total (${totalConfigured}) must equal the heat pool (${configuredPool}) before rolling.`
       );
       return;
     }
@@ -226,6 +301,124 @@ export default function HeatRollClient({
         // Also stop audio in this path since there is no animation
         stopAudioImmediate();
       }
+    }
+  }
+
+  async function ensurePlatformOptionsLoaded() {
+    if (platformOptions.length) return;
+    try {
+      const res = await fetch("/api/platforms");
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message || "Failed to load platforms");
+      const list = Array.isArray(json?.platforms) ? json.platforms : [];
+      setPlatformOptions(list);
+      if (!bonusPlatformId && list[0]?.id) {
+        setBonusPlatformId(list[0].id);
+      }
+    } catch (e) {
+      setEffectsError(String(e?.message || e));
+    }
+  }
+
+  async function handleActivatePowerup(kind) {
+    if (isHeatOver) return;
+    setEffectsError("");
+    try {
+      const body = { kind };
+      if (kind === "REWARD_BONUS_ROLL_PLATFORM") {
+        await ensurePlatformOptionsLoaded();
+        if (!bonusPlatformId) throw new Error("Choose a platform first");
+        body.platformId = bonusPlatformId;
+      }
+
+      const res = await fetch(`/api/gauntlet/heats/${heatId}/effects/activate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || `Failed to activate powerup (HTTP ${res.status})`);
+      }
+
+      const pool = json?.pool || null;
+      if (pool && typeof pool.configuredPool === "number") {
+        setConfiguredPool(pool.configuredPool);
+      }
+      if (pool && typeof pool.bonusRolls === "number") {
+        setBonusRollsCount(pool.bonusRolls);
+      }
+      if (pool && typeof pool.totalPool === "number") {
+        setTotalPool(pool.totalPool);
+      }
+
+      setInventoryByKind((prev) => ({
+        ...prev,
+        [kind]: Math.max(0, (Number(prev?.[kind]) || 0) - 1)
+      }));
+
+      // If this changes the configured pool size, rebuild default targets while still unlocked.
+      if (!isLocked) {
+        setPlatformTargets(buildInitialTargets(platforms || [], pool?.configuredPool || configuredPool));
+        setWesternRequired((prev) => Math.min(Number(prev) || 0, pool?.configuredPool || configuredPool));
+      }
+
+      router.refresh();
+    } catch (e) {
+      setEffectsError(String(e?.message || e));
+    }
+  }
+
+  async function handleMoveWheel(delta) {
+    if (isHeatOver) return;
+    if (!pendingRoll?.id) return;
+    setEffectsError("");
+    try {
+      const res = await fetch(
+        `/api/gauntlet/heats/${heatId}/rolls/${pendingRoll.id}/move-wheel`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ delta })
+        }
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message || "Failed to move wheel");
+
+      if (typeof json?.chosenIndex === "number") {
+        setWheel((prev) => (prev ? { ...prev, chosenIndex: json.chosenIndex } : prev));
+      }
+      if (json?.roll) {
+        setPendingRoll(json.roll);
+      }
+      if (typeof json?.remainingMoves === "number") {
+        setInventoryByKind((prev) => ({ ...prev, REWARD_MOVE_WHEEL: json.remainingMoves }));
+      }
+    } catch (e) {
+      setEffectsError(String(e?.message || e));
+    }
+  }
+
+  async function handleVetoReroll(rollId) {
+    if (isHeatOver) return;
+    if (!rollId) return;
+    setEffectsError("");
+    try {
+      const res = await fetch(
+        `/api/gauntlet/heats/${heatId}/rolls/${rollId}/veto-reroll`,
+        { method: "POST" }
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message || "Failed to veto reroll");
+
+      if (json?.roll) {
+        setRolls((prev) => prev.map((r) => (r.id === rollId ? json.roll : r)));
+      }
+      if (typeof json?.remainingVetos === "number") {
+        setInventoryByKind((prev) => ({ ...prev, REWARD_VETO_REROLL: json.remainingVetos }));
+      }
+    } catch (e) {
+      setEffectsError(String(e?.message || e));
     }
   }
 
@@ -311,8 +504,9 @@ export default function HeatRollClient({
 
   function handleTargetChange(platformId, rawValue) {
     if (isLocked || isHeatOver) return;
-    let value = Number(rawValue) || 1;
-    if (value < 1) value = 1;
+    let value = Number(rawValue);
+    if (!Number.isFinite(value)) value = minPerPlatform;
+    if (value < minPerPlatform) value = minPerPlatform;
     if (value > maxPerPlatform) value = maxPerPlatform;
     setPlatformTargets((prev) => ({ ...prev, [platformId]: value }));
   }
@@ -321,7 +515,7 @@ export default function HeatRollClient({
     if (isLocked || isHeatOver) return;
     let value = Number(rawValue);
     if (!Number.isFinite(value) || value < 0) value = 0;
-    if (value > defaultGameCounter) value = defaultGameCounter;
+    if (value > configuredPool) value = configuredPool;
     setWesternRequired(value);
   }
 
@@ -345,6 +539,7 @@ export default function HeatRollClient({
   }
 
   const isPoolFull = rolls.length >= defaultGameCounter;
+  const isPoolFull = rolls.length >= totalPool;
 
   useEffect(() => {
     if (!isPoolFull || finalSelectedGameId) return;
@@ -430,7 +625,7 @@ export default function HeatRollClient({
         throw new Error(json?.message || "Failed to reset your rolls for this heat");
       }
       setRolls([]);
-      setPlatformTargets(buildInitialTargets(platforms || [], defaultGameCounter));
+      setPlatformTargets(buildInitialTargets(platforms || [], configuredPool));
       setIsLocked(false);
       setFinalSelectedGameId(null);
       setSelectedRollId(null);
@@ -446,6 +641,75 @@ export default function HeatRollClient({
 
   return (
     <>
+      <section aria-label="Powerups" className={styles.powerupsBox}>
+        <div className={styles.powerupsTitle}>Powerups</div>
+        <div className={styles.powerupsRow}>
+          <div className={styles.powerupChip}>
+            <div className={styles.powerupIcon}>1</div>
+            <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_ROLL_POOL_PLUS_30 || 0}</div>
+            <button
+              type="button"
+              className={styles.powerupButton}
+              disabled={isHeatOver || isLocked || (inventoryByKind.REWARD_ROLL_POOL_PLUS_30 || 0) <= 0}
+              onClick={() => handleActivatePowerup("REWARD_ROLL_POOL_PLUS_30")}
+              title={isLocked ? "Activate before rolling" : "Use on this heat"}
+            >
+              Use
+            </button>
+          </div>
+
+          <div className={styles.powerupChip}>
+            <div className={styles.powerupIcon}>2</div>
+            <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_BONUS_ROLL_PLATFORM || 0}</div>
+            <button
+              type="button"
+              className={styles.powerupButton}
+              disabled={isHeatOver || (inventoryByKind.REWARD_BONUS_ROLL_PLATFORM || 0) <= 0}
+              onClick={() => handleActivatePowerup("REWARD_BONUS_ROLL_PLATFORM")}
+              onMouseEnter={() => ensurePlatformOptionsLoaded()}
+            >
+              Use
+            </button>
+          </div>
+
+          <div className={styles.powerupChip}>
+            <div className={styles.powerupIcon}>3</div>
+            <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_MOVE_WHEEL || 0}</div>
+          </div>
+
+          <div className={styles.powerupChip}>
+            <div className={styles.powerupIcon}>4</div>
+            <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_VETO_REROLL || 0}</div>
+          </div>
+        </div>
+
+        <div className={styles.powerupsSubRow}>
+          <div className={styles.powerupsSmallText}>
+            Configured pool: {configuredPool} (base {defaultGameCounter})
+            {bonusRollsCount ? ` + ${bonusRollsCount} bonus` : ""} → Total {totalPool}
+          </div>
+          {(inventoryByKind.REWARD_BONUS_ROLL_PLATFORM || 0) > 0 && (
+            <label className={styles.powerupsSmallText}>
+              Bonus platform:
+              <select
+                className={styles.powerupSelect}
+                value={bonusPlatformId}
+                onChange={(e) => setBonusPlatformId(e.target.value)}
+                onFocus={() => ensurePlatformOptionsLoaded()}
+              >
+                {platformOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{p.abbreviation ? ` (${p.abbreviation})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+
+        {effectsError ? <div className={styles.effectsError}>{effectsError}</div> : null}
+      </section>
+
       <div
         className={styles.configRow}
       >
@@ -458,7 +722,7 @@ export default function HeatRollClient({
             <div className={styles.cautionTitle}>Caution:</div>
             <div>Once you roll, your configuration for this heat is locked.</div>
             <br />
-            <div>Choose how many rolls to aim for on each platform (min 1 each).</div>
+            <div>Choose how many rolls to aim for on each platform (normally min 1 each; can be 0 if pool &lt; platform count).</div>
           </div>
           <div
             className={styles.targets}
@@ -477,7 +741,7 @@ export default function HeatRollClient({
                 ) : (
                   <input
                     type="number"
-                    min={1}
+                    min={minPerPlatform}
                     max={maxPerPlatform}
                     value={platformTargets[p.id] ?? ""}
                     onChange={(e) => handleTargetChange(p.id, e.target.value)}
@@ -489,10 +753,10 @@ export default function HeatRollClient({
           </div>
           {!isLocked && (
             <div className={styles.totals}>
-              Configured total: {totalConfigured} out of {defaultGameCounter}
+                      Configured total: {totalConfigured} out of {configuredPool}
               {configMismatch && (
                 <div className={styles.totalsError}>
-                  Total must equal {defaultGameCounter} before you can roll.
+                          Total must equal {configuredPool} before you can roll.
                 </div>
               )}
             </div>
@@ -507,7 +771,7 @@ export default function HeatRollClient({
                 <input
                   type="number"
                   min={0}
-                  max={defaultGameCounter}
+                    max={configuredPool}
                   value={westernRequired}
                   disabled={isHeatOver}
                   onChange={(e) => handleWesternRequiredChange(e.target.value)}
@@ -621,19 +885,36 @@ export default function HeatRollClient({
           onComplete={handleWheelComplete}
         />
 
+        {pendingRoll && (inventoryByKind.REWARD_MOVE_WHEEL || 0) > 0 && wheel?.games?.length ? (
+          <div className={styles.moveWheelRow}>
+            <button type="button" className={styles.moveWheelButton} onClick={() => handleMoveWheel(-2)}>
+              -2
+            </button>
+            <button type="button" className={styles.moveWheelButton} onClick={() => handleMoveWheel(-1)}>
+              -1
+            </button>
+            <button type="button" className={styles.moveWheelButton} onClick={() => handleMoveWheel(1)}>
+              +1
+            </button>
+            <button type="button" className={styles.moveWheelButton} onClick={() => handleMoveWheel(2)}>
+              +2
+            </button>
+          </div>
+        ) : null}
+
         <button
           onClick={handleRoll}
           disabled={
             isHeatOver ||
             isRolling ||
-            rolls.length >= defaultGameCounter ||
+            rolls.length >= totalPool ||
             configMismatch
           }
-          className={`${styles.rollButton} ${(isHeatOver || isRolling || rolls.length >= defaultGameCounter || configMismatch) ? styles.rollButtonDisabled : ""}`.trim()}
+          className={`${styles.rollButton} ${(isHeatOver || isRolling || rolls.length >= totalPool || configMismatch) ? styles.rollButtonDisabled : ""}`.trim()}
         >
           {isHeatOver
             ? "Heat over"
-            : rolls.length >= defaultGameCounter || configMismatch
+            : rolls.length >= totalPool || configMismatch
             ? "Can't roll"
             : isRolling
             ? "Rolling..."
@@ -669,6 +950,11 @@ export default function HeatRollClient({
                       : null
                   }
                   onTechnicalVeto={() => handleTechnicalVeto(roll.id)}
+                  onVetoReroll={
+                    !isHeatOver && (inventoryByKind.REWARD_VETO_REROLL || 0) > 0
+                      ? () => handleVetoReroll(roll.id)
+                      : null
+                  }
                 />
               ))}
             </div>

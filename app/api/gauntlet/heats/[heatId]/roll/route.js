@@ -5,6 +5,12 @@ import { ensureHeatIsMutable } from "@/lib/heatGuards";
 
 export const dynamic = "force-dynamic";
 
+function ceil30Pct(base) {
+  const n = Number(base);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.ceil(n * 0.3);
+}
+
 function normalizeTargets(heatPlatforms, defaultGameCounter, rawTargets) {
   if (!heatPlatforms.length || defaultGameCounter <= 0) {
     return {};
@@ -104,6 +110,67 @@ function shuffleInPlace(array) {
   return array;
 }
 
+function sumPoolDelta(heatEffects) {
+  return (heatEffects || []).reduce((acc, e) => acc + (Number(e.poolDelta) || 0), 0);
+}
+
+function getBonusEffects(heatEffects) {
+  return (heatEffects || []).filter(
+    (e) =>
+      e.kind === "REWARD_BONUS_ROLL_PLATFORM" &&
+      !e.consumedAt &&
+      (Number(e.remainingUses) || 0) > 0 &&
+      typeof e.platformId === "string" &&
+      e.platformId
+  );
+}
+
+async function createRollWithWheel({
+  prismaTx,
+  signupId,
+  gameId,
+  platformId,
+  order,
+  source,
+  bonusHeatEffectId,
+  chosenIndex,
+  wheelGames,
+  slotPlatforms
+}) {
+  const createdRoll = await prismaTx.heatRoll.create({
+    data: {
+      heatSignupId: signupId,
+      gameId,
+      platformId,
+      order,
+      source,
+      ...(bonusHeatEffectId ? { bonusHeatEffectId } : {})
+    },
+    include: {
+      game: {
+        include: {
+          platforms: { select: { id: true, name: true, abbreviation: true } }
+        }
+      },
+      platform: { select: { id: true, name: true, abbreviation: true } }
+    }
+  });
+
+  const wheelGameIds = (wheelGames || []).map((g) => g?.id).filter(Boolean);
+  const wheelPlatformIds = (slotPlatforms || []).map((p) => (p ? p.id : null));
+
+  await prismaTx.heatRollWheel.create({
+    data: {
+      heatRollId: createdRoll.id,
+      chosenIndex: Number(chosenIndex) || 0,
+      gameIds: wheelGameIds,
+      platformIds: wheelPlatformIds
+    }
+  });
+
+  return createdRoll;
+}
+
 export async function POST(request, { params }) {
   try {
     const session = await getSession();
@@ -173,16 +240,36 @@ export async function POST(request, { params }) {
       select: {
         id: true,
         order: true,
+          source: true,
+          bonusHeatEffectId: true,
         platformId: true,
         gameId: true,
         game: { select: { hasWesternRelease: true } }
       }
     });
 
-  const totalExisting = existingRolls.length;
-  if (totalExisting >= heat.defaultGameCounter) {
-    return NextResponse.json({ message: "All rolls for this heat have been used" }, { status: 400 });
-  }
+    const heatEffects = await prisma.heatEffect.findMany({
+      where: { heatId, userId },
+      select: {
+        id: true,
+        kind: true,
+        poolDelta: true,
+        platformId: true,
+        remainingUses: true,
+        consumedAt: true
+      }
+    });
+
+    const basePool = heat.defaultGameCounter;
+    const poolDelta = sumPoolDelta(heatEffects);
+    const configuredPool = Math.max(1, Number(basePool) + poolDelta);
+    const bonusEffects = getBonusEffects(heatEffects);
+    const totalAllowed = configuredPool + bonusEffects.length;
+
+    const totalExisting = existingRolls.length;
+    if (totalExisting >= totalAllowed) {
+      return NextResponse.json({ message: "All rolls for this heat have been used" }, { status: 400 });
+    }
 
   let targets = signup.platformTargets || null;
   let westernRequired = signup.westernRequired ?? 0;
@@ -190,14 +277,14 @@ export async function POST(request, { params }) {
   if (!targets) {
     if (!existingRolls.length) {
       // First roll: lock targets based on client configuration (normalized)
-      targets = normalizeTargets(heat.platforms, heat.defaultGameCounter, rawTargets);
+      targets = normalizeTargets(heat.platforms, configuredPool, rawTargets);
 
       let requestedWestern = Number(rawWesternRequired);
       if (!Number.isFinite(requestedWestern) || requestedWestern < 0) {
         requestedWestern = 0;
       }
-      if (requestedWestern > heat.defaultGameCounter) {
-        requestedWestern = heat.defaultGameCounter;
+      if (requestedWestern > configuredPool) {
+        requestedWestern = configuredPool;
       }
 
       signup = await prisma.heatSignup.update({
@@ -207,11 +294,14 @@ export async function POST(request, { params }) {
       westernRequired = requestedWestern;
     } else {
       // Fallback for legacy data without targets but with existing rolls
-      targets = normalizeTargets(heat.platforms, heat.defaultGameCounter, {});
+      targets = normalizeTargets(heat.platforms, configuredPool, {});
     }
   }
 
-  const existingCounts = existingRolls.reduce((acc, roll) => {
+  const normalRolls = existingRolls.filter((r) => r.source === "NORMAL");
+  const bonusRolls = existingRolls.filter((r) => r.source === "BONUS");
+
+  const existingCounts = normalRolls.reduce((acc, roll) => {
     if (!roll.platformId) return acc;
     const key = roll.platformId;
     acc[key] = (acc[key] || 0) + 1;
@@ -243,16 +333,129 @@ export async function POST(request, { params }) {
   } else {
     existingWestern = 0;
   }
-  const rollsLeft = heat.defaultGameCounter - totalExisting;
+  const rollsLeft = totalAllowed - totalExisting;
   const neededWestern = Math.max(0, westernRequired - existingWestern);
   const mustBeWestern = neededWestern > 0 && neededWestern >= rollsLeft;
 
+  const existingGameIds = existingRolls.map((r) => r.gameId);
+
+  const isBonusRoll = normalRolls.length >= configuredPool;
+
+  // BONUS roll path (from activated powerup #2)
+  if (isBonusRoll) {
+    const effect = bonusEffects[0] || null;
+    if (!effect?.id || !effect.platformId) {
+      return NextResponse.json({ message: "No bonus rolls available" }, { status: 400 });
+    }
+
+    const chosenPlatformId = effect.platformId;
+
+    const baseWhere = {
+      ...(existingGameIds.length ? { id: { notIn: existingGameIds } } : {})
+    };
+
+    const ids = await prisma.game.findMany({
+      where: {
+        ...baseWhere,
+        platforms: { some: { id: chosenPlatformId } },
+        ...(mustBeWestern
+          ? {
+              gamePlatforms: {
+                some: { platformId: chosenPlatformId, hasWesternRelease: true }
+              }
+            }
+          : {})
+      },
+      select: { id: true }
+    });
+
+    const eligible = shuffleInPlace(ids.map((g) => g.id));
+    if (!eligible.length) {
+      return NextResponse.json({ message: "No eligible games available for this bonus platform" }, { status: 400 });
+    }
+
+    const take = Math.min(30, eligible.length);
+    const wheelIds = eligible.slice(0, take);
+
+    const games = await prisma.game.findMany({
+      where: { id: { in: wheelIds } },
+      include: {
+        platforms: { select: { id: true, name: true, abbreviation: true } }
+      }
+    });
+
+    const gameById = new Map(games.map((g) => [g.id, g]));
+    let wheelGames = wheelIds.map((id) => gameById.get(id)).filter(Boolean);
+    if (!wheelGames.length) {
+      return NextResponse.json({ message: "No eligible games available for this bonus platform" }, { status: 400 });
+    }
+
+    // Shuffle visual order.
+    shuffleInPlace(wheelGames);
+
+    const platform = await prisma.platform.findUnique({
+      where: { id: chosenPlatformId },
+      select: { id: true, name: true, abbreviation: true }
+    });
+
+    const slotPlatforms = wheelGames.map(() =>
+      platform ? { id: platform.id, name: platform.name, abbreviation: platform.abbreviation } : null
+    );
+
+    const chosenIndex = Math.floor(Math.random() * wheelGames.length);
+    const chosenGame = wheelGames[chosenIndex];
+
+    const maxExistingOrder = existingRolls.reduce(
+      (acc, roll) => Math.max(acc, Number(roll.order) || 0),
+      0
+    );
+
+    try {
+      const createdRoll = await prisma.$transaction(async (tx) => {
+        const updated = await tx.heatEffect.updateMany({
+          where: { id: effect.id, remainingUses: { gt: 0 }, consumedAt: null },
+          data: { remainingUses: { decrement: 1 }, consumedAt: new Date() }
+        });
+        if (!updated?.count) {
+          throw new Error("Bonus roll was already used. Please try again.");
+        }
+
+        return createRollWithWheel({
+          prismaTx: tx,
+          signupId: signup.id,
+          gameId: chosenGame.id,
+          platformId: chosenPlatformId,
+          order: maxExistingOrder + 1,
+          source: "BONUS",
+          bonusHeatEffectId: effect.id,
+          chosenIndex,
+          wheelGames,
+          slotPlatforms
+        });
+      });
+
+      return NextResponse.json({
+        roll: createdRoll,
+        wheel: {
+          games: wheelGames,
+          chosenIndex,
+          slotPlatforms
+        },
+        targets
+      });
+    } catch (err) {
+      return NextResponse.json(
+        { message: err?.message ? String(err.message) : "Failed to create bonus roll" },
+        { status: 400 }
+      );
+    }
+  }
+
+  // NORMAL roll path
   const chosenPlatformId = pickPlatformIdByRemaining(targets, existingCounts);
   if (!chosenPlatformId) {
     return NextResponse.json({ message: "No remaining rolls available for configured platform targets" }, { status: 400 });
   }
-
-  const existingGameIds = existingRolls.map((r) => r.gameId);
 
   // Build a mixed wheel across all platforms that still have remaining target counts,
   // but force the chosen game to come from the platform selected by remaining-quota logic.
@@ -398,40 +601,46 @@ export async function POST(request, { params }) {
       0
     );
 
-    async function createRollWithOrder(order) {
-      return prisma.heatRoll.create({
-        data: {
-          heatSignupId: signup.id,
-          gameId: chosenGame.id,
-          platformId: chosenPlatformId,
-          order
-        },
-        include: {
-          game: {
-            include: {
-              platforms: { select: { id: true, name: true, abbreviation: true } }
-            }
-          },
-          platform: { select: { id: true, name: true, abbreviation: true } }
-        }
-      });
-    }
-
     let createdRoll;
     try {
-      createdRoll = await createRollWithOrder(maxExistingOrder + 1);
+      createdRoll = await prisma.$transaction(async (tx) => {
+        try {
+          return await createRollWithWheel({
+            prismaTx: tx,
+            signupId: signup.id,
+            gameId: chosenGame.id,
+            platformId: chosenPlatformId,
+            order: maxExistingOrder + 1,
+            source: "NORMAL",
+            chosenIndex,
+            wheelGames,
+            slotPlatforms
+          });
+        } catch (err) {
+          // Rare race: two rolls at once. Retry once with the latest max.
+          if (err?.code === "P2002") {
+            const latest = await tx.heatRoll.aggregate({
+              where: { heatSignupId: signup.id },
+              _max: { order: true }
+            });
+            const nextOrder = (latest?._max?.order || 0) + 1;
+            return createRollWithWheel({
+              prismaTx: tx,
+              signupId: signup.id,
+              gameId: chosenGame.id,
+              platformId: chosenPlatformId,
+              order: nextOrder,
+              source: "NORMAL",
+              chosenIndex,
+              wheelGames,
+              slotPlatforms
+            });
+          }
+          throw err;
+        }
+      });
     } catch (err) {
-      // Rare race: two rolls at once. Retry once with the latest max.
-      if (err?.code === 'P2002') {
-        const latest = await prisma.heatRoll.aggregate({
-          where: { heatSignupId: signup.id },
-          _max: { order: true }
-        });
-        const nextOrder = (latest?._max?.order || 0) + 1;
-        createdRoll = await createRollWithOrder(nextOrder);
-      } else {
-        throw err;
-      }
+      throw err;
     }
 
     return NextResponse.json({

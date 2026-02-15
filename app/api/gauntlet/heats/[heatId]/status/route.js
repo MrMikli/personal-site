@@ -8,6 +8,66 @@ export const dynamic = "force-dynamic";
 const ALLOWED_STATUSES = ["UNBEATEN", "BEATEN", "GIVEN_UP"];
 const TERMINAL_STATUSES = ["BEATEN", "GIVEN_UP"];
 
+function ceil30Pct(base) {
+  const n = Number(base);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.ceil(n * 0.3);
+}
+
+async function awardRewardPowerup({ gauntletId, userId }) {
+  // 1..4 inclusive
+  const roll = Math.floor(Math.random() * 4) + 1;
+
+  let kind;
+  let uses;
+  let label;
+
+  if (roll === 1) {
+    kind = "REWARD_ROLL_POOL_PLUS_30";
+    uses = 1;
+    label = "#1 (Roll pool +30% for one heat)";
+  } else if (roll === 2) {
+    kind = "REWARD_BONUS_ROLL_PLATFORM";
+    uses = 1;
+    label = "#2 (Bonus roll on any platform)";
+  } else if (roll === 3) {
+    kind = "REWARD_MOVE_WHEEL";
+    uses = 4;
+    label = "#3 (Move wheel 1–2 slots; 4 uses)";
+  } else {
+    kind = "REWARD_VETO_REROLL";
+    uses = 2;
+    label = "#4 (Veto reroll; 2 uses)";
+  }
+
+  const row = await prisma.gauntletEffect.upsert({
+    where: {
+      gauntletId_userId_kind: {
+        gauntletId,
+        userId,
+        kind
+      }
+    },
+    create: {
+      gauntletId,
+      userId,
+      kind,
+      remainingUses: uses
+    },
+    update: {
+      remainingUses: { increment: uses }
+    }
+  });
+
+  return {
+    powerupNumber: roll,
+    kind,
+    addedUses: uses,
+    totalUses: row.remainingUses,
+    label
+  };
+}
+
 export async function POST(request, { params }) {
   const session = await getSession();
   if (!session?.user) {
@@ -55,6 +115,9 @@ export async function POST(request, { params }) {
     }
   });
 
+  const prevStatus = signup?.status || null;
+  const isTransition = !signup || prevStatus !== status;
+
   // Once a user confirms they've beaten or given up, lock it in.
   // Admin reset-signup is the intended escape hatch.
   if (signup && TERMINAL_STATUSES.includes(signup.status) && signup.status !== status) {
@@ -88,5 +151,88 @@ export async function POST(request, { params }) {
     });
   }
 
-  return NextResponse.json({ success: true, status: signup.status });
+  // If we just transitioned into a terminal status, award the reward/punishment.
+  // We intentionally do this AFTER persisting status so repeated calls don't re-award.
+  let reward = null;
+  let punishment = null;
+
+  if (isTransition && status === "BEATEN") {
+    try {
+      const heat = await prisma.heat.findUnique({
+        where: { id: heatId },
+        select: { gauntletId: true }
+      });
+      if (heat?.gauntletId) {
+        reward = await awardRewardPowerup({ gauntletId: heat.gauntletId, userId });
+      }
+    } catch (_e) {
+      // ignore reward errors (status update already succeeded)
+    }
+  }
+
+  if (isTransition && status === "GIVEN_UP") {
+    try {
+      const heat = await prisma.heat.findUnique({
+        where: { id: heatId },
+        select: { gauntletId: true, order: true }
+      });
+
+      if (heat?.gauntletId && typeof heat.order === "number") {
+        const nextHeat = await prisma.heat.findFirst({
+          where: {
+            gauntletId: heat.gauntletId,
+            order: { gt: heat.order }
+          },
+          orderBy: { order: "asc" },
+          select: { id: true, order: true, name: true, defaultGameCounter: true }
+        });
+
+        // Last heat: discard punishment.
+        if (nextHeat) {
+          const base = nextHeat.defaultGameCounter;
+          // If base pool is 1, punishment is unavailable (skip).
+          if (Number(base) > 1) {
+            const delta = -ceil30Pct(base);
+            const nextRollPool = Math.max(1, Number(base) + delta);
+
+            await prisma.heatEffect.create({
+              data: {
+                heatId: nextHeat.id,
+                userId,
+                kind: "PUNISH_ROLL_POOL_MINUS_30",
+                poolDelta: delta,
+                remainingUses: 1
+              }
+            });
+
+            punishment = {
+              kind: "PUNISH_ROLL_POOL_MINUS_30",
+              poolDelta: delta,
+              nextHeat: {
+                id: nextHeat.id,
+                order: nextHeat.order,
+                name: nextHeat.name || null
+              },
+              nextRollPool
+            };
+          } else {
+            punishment = {
+              kind: "PUNISH_ROLL_POOL_MINUS_30",
+              poolDelta: 0,
+              nextHeat: {
+                id: nextHeat.id,
+                order: nextHeat.order,
+                name: nextHeat.name || null
+              },
+              nextRollPool: base
+            };
+          }
+        }
+      }
+    } catch (_e) {
+      // ignore punishment errors
+    }
+  }
+
+  return NextResponse.json({ success: true, status: signup.status, reward, punishment });
 }

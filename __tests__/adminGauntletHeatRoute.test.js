@@ -11,8 +11,14 @@ jest.mock("@/lib/prisma", () => ({
     heat: {
       findFirst: jest.fn(),
       update: jest.fn(),
-      deleteMany: jest.fn()
-    }
+      deleteMany: jest.fn(),
+      delete: jest.fn()
+    },
+    $transaction: jest.fn(),
+    heatSignup: { findMany: jest.fn(), deleteMany: jest.fn() },
+    heatRoll: { findMany: jest.fn(), deleteMany: jest.fn() },
+    heatRollWheel: { deleteMany: jest.fn() },
+    heatEffect: { deleteMany: jest.fn() }
   }
 }));
 
@@ -54,7 +60,7 @@ describe("/api/admin/gauntlets/[gauntletId]/heats/[heatId]", () => {
 
   test("DELETE returns 404 when nothing deleted", async () => {
     getSession.mockResolvedValueOnce({ user: { isAdmin: true } });
-    prisma.heat.deleteMany.mockResolvedValueOnce({ count: 0 });
+    prisma.$transaction.mockResolvedValueOnce({ notFound: true });
 
     const res = await DELETE(null, { params: { gauntletId: "g1", heatId: "h1" } });
     expect(res.status).toBe(404);
@@ -62,10 +68,18 @@ describe("/api/admin/gauntlets/[gauntletId]/heats/[heatId]", () => {
 
   test("DELETE returns deleted count", async () => {
     getSession.mockResolvedValueOnce({ user: { isAdmin: true } });
-    prisma.heat.deleteMany.mockResolvedValueOnce({ count: 1 });
+    prisma.$transaction.mockResolvedValueOnce({
+      notFound: false,
+      heat: { id: "h1" },
+      deleted: { heatEffects: 0, heatSignups: 0, heatRolls: 0, heatRollWheels: 0 }
+    });
 
     const res = await DELETE(null, { params: { gauntletId: "g1", heatId: "h1" } });
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ deleted: 1 });
+    await expect(res.json()).resolves.toMatchObject({
+      notFound: false,
+      heat: { id: "h1" },
+      deleted: { heatEffects: 0, heatSignups: 0, heatRolls: 0, heatRollWheels: 0 }
+    });
   });
 });

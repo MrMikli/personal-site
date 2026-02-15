@@ -195,6 +195,23 @@ export default function GauntletClient({ current, upcoming, previous }) {
       if (json?.status && typeof json.status === "string") {
         setStatusByHeatId((prev) => ({ ...prev, [heatId]: json.status }));
       }
+
+      if (nextStatus === "BEATEN" && json?.reward) {
+        const r = json.reward;
+        const total = typeof r.totalUses === "number" ? r.totalUses : null;
+        const suffix = total != null ? ` (You now have ${total} total uses.)` : "";
+        window.alert(`Reward earned: Powerup ${r.label || ""}${suffix}`.trim());
+      }
+
+      if (nextStatus === "GIVEN_UP" && json?.punishment) {
+        const p = json.punishment;
+        if (typeof p.nextRollPool === "number") {
+          const heatLabel = p?.nextHeat?.name
+            ? `next heat (${p.nextHeat.name})`
+            : "next heat";
+          window.alert(`Punishment applied: your roll pool for the ${heatLabel} will be ${p.nextRollPool}.`);
+        }
+      }
     } catch (_e) {
       setStatusByHeatId((prev) => {
         const clone = { ...prev };

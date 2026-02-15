@@ -175,6 +175,36 @@ export default async function HeatGameSelectionPage({ params }) {
   const initialSelectedGameId = signup?.selectedGameId || null;
   const initialWesternRequired = signup?.westernRequired ?? 0;
 
+  const heatEffects = await prisma.heatEffect.findMany({
+    where: { heatId: heat.id, userId: session.user.id },
+    select: {
+      id: true,
+      kind: true,
+      poolDelta: true,
+      platformId: true,
+      remainingUses: true,
+      consumedAt: true
+    }
+  });
+
+  const poolDelta = (heatEffects || []).reduce(
+    (acc, e) => acc + (Number(e.poolDelta) || 0),
+    0
+  );
+  const configuredGameCounter = Math.max(1, heat.defaultGameCounter + poolDelta);
+  const bonusRollsAvailable = (heatEffects || []).filter(
+    (e) =>
+      e.kind === "REWARD_BONUS_ROLL_PLATFORM" &&
+      !e.consumedAt &&
+      (Number(e.remainingUses) || 0) > 0
+  ).length;
+  const totalGameCounter = configuredGameCounter + bonusRollsAvailable;
+
+  const effectInventory = await prisma.gauntletEffect.findMany({
+    where: { gauntletId: heat.gauntletId, userId: session.user.id },
+    select: { kind: true, remainingUses: true }
+  });
+
   const nowMs2 = Date.now();
 
   const startsBounds = getUtcDayBoundsMs(heat.startsAt);
@@ -256,6 +286,9 @@ export default async function HeatGameSelectionPage({ params }) {
         <HeatRollClient
           heatId={heat.id}
           defaultGameCounter={heat.defaultGameCounter}
+          configuredGameCounter={configuredGameCounter}
+          totalGameCounter={totalGameCounter}
+          bonusRollsAvailable={bonusRollsAvailable}
           platforms={heat.platforms}
           initialRolls={initialRolls}
           initialTargets={initialTargets}
@@ -263,6 +296,8 @@ export default async function HeatGameSelectionPage({ params }) {
           initialWesternRequired={initialWesternRequired}
           isHeatOver={isHeatOver}
           isAdmin={!!session.user.isAdmin}
+          initialHeatEffects={heatEffects}
+          initialEffectInventory={effectInventory}
         />
       </div>
     </div>

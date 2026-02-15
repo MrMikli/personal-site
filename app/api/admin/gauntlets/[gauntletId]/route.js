@@ -36,9 +36,22 @@ export async function DELETE(_request, { params }) {
         : [];
       const heatSignupIds = signups.map((s) => s.id);
 
+      // Delete wheels first (FK -> HeatRoll)
+      const deletedWheels = heatSignupIds.length
+        ? await tx.heatRollWheel.deleteMany({
+            where: { heatRoll: { heatSignupId: { in: heatSignupIds } } }
+          })
+        : { count: 0 };
+
       const deletedRolls = heatSignupIds.length
         ? await tx.heatRoll.deleteMany({ where: { heatSignupId: { in: heatSignupIds } } })
         : { count: 0 };
+
+      const deletedHeatEffects = heatIds.length
+        ? await tx.heatEffect.deleteMany({ where: { heatId: { in: heatIds } } })
+        : { count: 0 };
+
+      const deletedGauntletEffects = await tx.gauntletEffect.deleteMany({ where: { gauntletId } });
 
       const deletedSignups = heatIds.length
         ? await tx.heatSignup.deleteMany({ where: { heatId: { in: heatIds } } })
@@ -63,7 +76,10 @@ export async function DELETE(_request, { params }) {
         deleted: {
           heats: deletedHeats.count,
           heatSignups: deletedSignups.count,
-          heatRolls: deletedRolls.count
+          heatRolls: deletedRolls.count,
+          heatRollWheels: deletedWheels.count,
+          heatEffects: deletedHeatEffects.count,
+          gauntletEffects: deletedGauntletEffects.count
         }
       };
     });
@@ -74,6 +90,14 @@ export async function DELETE(_request, { params }) {
 
     return NextResponse.json(result);
   } catch (e) {
-    return NextResponse.json({ message: "Failed to delete gauntlet" }, { status: 500 });
+    console.error("Failed to delete gauntlet", e);
+    const isProd = process.env.NODE_ENV === "production";
+    const errorMessage = e?.message ? String(e.message) : String(e);
+    return NextResponse.json(
+      {
+        message: isProd ? "Failed to delete gauntlet" : `Failed to delete gauntlet: ${errorMessage}`
+      },
+      { status: 500 }
+    );
   }
 }

@@ -117,6 +117,103 @@
   margin-top: 8px;
 }
 
+.powerupsBox {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.powerupsTitle {
+  font-weight: 700;
+  color: #111827;
+  font-size: 14px;
+}
+
+.powerupsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.powerupChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.powerupIcon {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  background: #111827;
+  color: white;
+  font-size: 12px;
+}
+
+.powerupMeta {
+  font-size: 12px;
+  color: #374151;
+  min-width: 38px;
+}
+
+.powerupButton {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.powerupButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.powerupsSubRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.powerupsSmallText {
+  font-size: 12px;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.powerupSelect {
+  margin-left: 6px;
+  font-size: 12px;
+}
+
+.effectsError {
+  color: crimson;
+  font-size: 12px;
+}
+
 .rollingArea {
   margin-top: 8px;
   padding: 24px;
@@ -129,6 +226,23 @@
   justify-content: center;
   background: radial-gradient(circle at top, rgba(255,255,255,0.9), rgba(245,245,245,0.95));
   gap: 16px;
+}
+
+.moveWheelRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.moveWheelButton {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
 }
 
 .rollingTop {

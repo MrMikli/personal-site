@@ -13,6 +13,22 @@ enum HeatSignupStatus {
   GIVEN_UP
 }
 
+enum EffectKind {
+  // Punishment (applied to a specific future heat)
+  PUNISH_ROLL_POOL_MINUS_30
+
+  // Rewards
+  REWARD_ROLL_POOL_PLUS_30
+  REWARD_BONUS_ROLL_PLATFORM
+  REWARD_MOVE_WHEEL
+  REWARD_VETO_REROLL
+}
+
+enum HeatRollSource {
+  NORMAL
+  BONUS
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique
@@ -24,6 +40,9 @@ model User {
   gauntlets   Gauntlet[]
   // Per-heat participation
   heatSignups HeatSignup[]
+
+  gauntletEffects GauntletEffect[]
+  heatEffects     HeatEffect[]
 }
 
 model Platform {
@@ -38,6 +57,8 @@ model Platform {
   heats Heat[]
   // Rolled games in signups optionally reference a platform
   rolls HeatRoll[] @relation("HeatRollPlatform")
+
+  heatEffects HeatEffect[] @relation("HeatEffectPlatform")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -95,6 +116,8 @@ model Gauntlet {
   // Implicit M:N relation: gauntlet signups
   users User[]
 
+  effects GauntletEffect[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -118,7 +141,59 @@ model Heat {
   // Users participating in this heat
   signups HeatSignup[]
 
+  effects HeatEffect[]
+
   @@index([gauntletId, order])
+}
+
+// Inventory of powerups per user per gauntlet.
+// Punishments are stored as HeatEffect rows and do not live in inventory.
+model GauntletEffect {
+  id        String     @id @default(cuid())
+  gauntletId String
+  gauntlet  Gauntlet   @relation(fields: [gauntletId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind          EffectKind
+  remainingUses Int        @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gauntletId, userId, kind])
+  @@index([userId])
+  @@index([gauntletId])
+}
+
+// Heat-scoped effects: punishments and activated/consumable heat-specific rewards.
+model HeatEffect {
+  id     String @id @default(cuid())
+  heatId String
+  heat   Heat   @relation(fields: [heatId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind EffectKind
+
+  // For roll pool size modifications (positive or negative).
+  poolDelta Int?
+
+  // For bonus-roll effects. Can be any platform with games.
+  platformId String?
+  platform   Platform? @relation("HeatEffectPlatform", fields: [platformId], references: [id], onDelete: SetNull)
+
+  bonusRolls HeatRoll[] @relation("BonusHeatEffect")
+
+  // For consumables that produce an action within a heat (e.g., bonus roll token).
+  remainingUses Int      @default(1)
+  consumedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([heatId, userId])
+  @@index([userId, kind])
 }
 
 model HeatSignup {
@@ -155,8 +230,30 @@ model HeatRoll {
   platformId   String?
   platform     Platform?  @relation("HeatRollPlatform", fields: [platformId], references: [id])
   order        Int
+  source       HeatRollSource @default(NORMAL)
+
+  bonusHeatEffectId String?
+  bonusHeatEffect   HeatEffect? @relation("BonusHeatEffect", fields: [bonusHeatEffectId], references: [id], onDelete: SetNull)
+
+  wheel HeatRollWheel?
   createdAt    DateTime   @default(now())
 
   @@unique([heatSignupId, order])
   @@index([heatSignupId])
+}
+
+// Stores the wheel contents for a roll so we can support move-wheel and veto-reroll server-side.
+model HeatRollWheel {
+  id         String   @id @default(cuid())
+  heatRollId String   @unique
+  heatRoll   HeatRoll @relation(fields: [heatRollId], references: [id], onDelete: Cascade)
+
+  chosenIndex Int
+  gameIds     Json
+  platformIds Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([heatRollId])
 }

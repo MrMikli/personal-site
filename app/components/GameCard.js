@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import styles from "./GameCard.module.css";
 
-export default function GameCard({ game, variant = "pool", onTechnicalVeto, platformLabelOverride = null }) {
+export default function GameCard({ game, variant = "pool", onTechnicalVeto, onVetoReroll, platformLabelOverride = null }) {
   if (!game) return null;
 
   let year = null;
@@ -57,6 +57,21 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, plat
     setMenuOpen(false);
   }
 
+  function handleVetoRerollClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onVetoReroll) return;
+    const confirmed = window.confirm(
+      "Use a veto reroll on this pick? This will consume 1 veto use and replace this roll with a new result."
+    );
+    if (!confirmed) {
+      setMenuOpen(false);
+      return;
+    }
+    onVetoReroll();
+    setMenuOpen(false);
+  }
+
   return (
     <div className={`${styles.card} ${isWheel ? styles.cardWheel : ""}`.trim()}>
       {backlogUrl && variant === "pool" ? (
@@ -95,7 +110,7 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, plat
           </div>
         )}
       </div>
-      {variant === "pool" && onTechnicalVeto && (
+      {variant === "pool" && (onTechnicalVeto || onVetoReroll) && (
         <div className={styles.menuWrap}>
           <button
             type="button"
@@ -106,13 +121,24 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, plat
           </button>
           {menuOpen && (
             <div className={styles.menu}>
-              <button
-                type="button"
-                onClick={handleTechnicalVetoClick}
-                className={styles.menuItemDanger}
-              >
-                Technical veto
-              </button>
+              {onTechnicalVeto && (
+                <button
+                  type="button"
+                  onClick={handleTechnicalVetoClick}
+                  className={styles.menuItemDanger}
+                >
+                  Technical veto
+                </button>
+              )}
+              {onVetoReroll && (
+                <button
+                  type="button"
+                  onClick={handleVetoRerollClick}
+                  className={styles.menuItem}
+                >
+                  Veto reroll
+                </button>
+              )}
             </div>
           )}
         </div>
