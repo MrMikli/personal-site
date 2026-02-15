@@ -51,5 +51,18 @@ Useful Scripts
 - `dev`: starts Next.js dev server with hot reload.
 - `build`: generates Prisma client then builds the app.
 - `start`: starts Next.js in production mode (requires `build`).
+- `test`: runs Jest.
+- `test:watch`: runs Jest in watch mode.
 - `prisma:push`: `prisma db push` convenience alias.
+
+Testing
+-------
+
+```bash
+# Run all tests
+npm test
+
+# Watch mode
+npm run test:watch
+```
 
