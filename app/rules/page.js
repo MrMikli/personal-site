@@ -95,6 +95,11 @@ export default function RulesPage() {
             <div>
                 Look man, I'm not a cop - if you find a bug or exploit in a game that lets you beat it faster/easier, no one will care, but it'd be pretty lame to look up walkthroughs or speedrun strats online. <br />
             </div>
+
+            <h3 className={styles.sectionTitle}>Help I'm fucking retarded how do I retro game heeeelp I'm such a fat fucking chud who can't do anything</h3>
+            <div>
+                Look up your console on the <a href="https://emulation.gametechwiki.com/index.php/Main_Page" target="_blank" rel="noopener noreferrer">Emulation Wiki</a> and pick a recommended emulator. Then find a ROM somewhere. Then play the game. Retard. 
+            </div>
         </div>
     );
 }

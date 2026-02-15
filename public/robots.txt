@@ -1,0 +1,6 @@
+# robots.txt
+# Requests that well-behaved crawlers do not index or crawl this site.
+# Note: This is advisory (not an access control mechanism).
+
+User-agent: *
+Disallow: /
