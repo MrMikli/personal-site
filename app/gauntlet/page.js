@@ -234,16 +234,14 @@ export default async function GauntletPage() {
     <div className={styles.container}>
       <h1>Retro Game Gauntlet</h1>
       <p>Welcome, {session.user.username}</p>
-
-      <a href="/rules"> I don't get it (idgi)</a>
+      <div className={styles.sanaeBanner}>
+        <img src="/boomer_sanae.png" alt="Sanae" className={styles.sanaeImage} />
+      </div>
+      <a href="/rules">→ Help, I'm retarded and I don't get it ←</a>
       <section>
         <h2>Gauntlets</h2>
         <GauntletClient current={current} upcoming={upcoming} previous={previous} />
       </section>
-
-      <div className={styles.sanaeBanner}>
-        <img src="/boomer_sanae.png" alt="Sanae" className={styles.sanaeImage} />
-      </div>
     </div>
   );
 }

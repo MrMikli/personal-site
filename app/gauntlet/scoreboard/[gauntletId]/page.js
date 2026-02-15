@@ -23,9 +23,9 @@ function getGameYear(game) {
 }
 
 const STATUS_LABELS = {
-  UNBEATEN: "Unbeaten",
-  BEATEN: "Beaten",
-  GIVEN_UP: "Given up"
+  UNBEATEN: "?",
+  BEATEN: "KING GAMER",
+  GIVEN_UP: "FAT LOSER"
 };
 
 function TrophyIcon({ className }) {

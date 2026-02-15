@@ -40,7 +40,7 @@ export default async function RootLayout({ children }) {
       <body>
         <header className={styles.header}>
           <div className={styles.nav}>
-            <Link href="/">Home</Link> | 
+            <Link href="/"><img src="/boomer_sanae_cut.png" alt="Home" className={styles.logo} /></Link> | 
             <Link href="/roll-simulator">Roll simulator</Link> |
             {user && <Link href="/gauntlet">RGG</Link>} |
             {user?.isAdmin && <Link href="/admin">Admin</Link>} |
