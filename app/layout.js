@@ -24,7 +24,7 @@ export const metadata = {
   title: "Funny Games 1997",
   description: "Site for hosting Funny Games 1997 events and features.",
   icons: {
-    icon: "/wikchud.webp"
+    icon: "/boomer_sanae_cut.png"
   }
 };
 
