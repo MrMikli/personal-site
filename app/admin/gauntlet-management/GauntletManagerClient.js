@@ -12,6 +12,7 @@ export default function GauntletManagerClient() {
   const [loading, setLoading] = useState(false);
 
   const [gName, setGName] = useState("");
+  const [gEffectsEnabled, setGEffectsEnabled] = useState(true);
 
   const [hName, setHName] = useState("");
   const [hStartsAt, setHStartsAt] = useState("");
@@ -85,11 +86,12 @@ export default function GauntletManagerClient() {
       const res = await fetch("/api/admin/gauntlets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: gName.trim() })
+        body: JSON.stringify({ name: gName.trim(), effectsEnabled: !!gEffectsEnabled })
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Failed to create gauntlet");
       setGName("");
+      setGEffectsEnabled(true);
       await loadGauntlets();
     } catch (e) {
       setError(String(e.message || e));
@@ -210,6 +212,14 @@ export default function GauntletManagerClient() {
           <label className={styles.field}>
             <span>Name</span>
             <input value={gName} onChange={(e) => setGName(e.target.value)} />
+          </label>
+          <label className={styles.checkboxRow}>
+            <input
+              type="checkbox"
+              checked={!!gEffectsEnabled}
+              onChange={(e) => setGEffectsEnabled(e.target.checked)}
+            />
+            <span>Enable punishments + powerups for this gauntlet</span>
           </label>
           <button onClick={createGauntlet} disabled={loading || !gName.trim()}>
             Create Gauntlet

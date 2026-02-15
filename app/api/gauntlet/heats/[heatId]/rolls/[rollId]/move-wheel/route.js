@@ -30,6 +30,8 @@ export async function POST(request, { params }) {
     return NextResponse.json({ message: "Invalid delta" }, { status: 400 });
   }
 
+  const cost = Math.abs(delta);
+
   const userId = session.user.id;
 
   const roll = await prisma.heatRoll.findUnique({
@@ -40,7 +42,7 @@ export async function POST(request, { params }) {
           id: true,
           userId: true,
           heatId: true,
-          heat: { select: { gauntletId: true } }
+          heat: { select: { gauntletId: true, gauntlet: { select: { effectsEnabled: true } } } }
         }
       },
       wheel: true
@@ -100,6 +102,10 @@ export async function POST(request, { params }) {
     return NextResponse.json({ message: "Missing gauntletId" }, { status: 500 });
   }
 
+  if (roll.heatSignup.heat?.gauntlet?.effectsEnabled === false) {
+    return NextResponse.json({ message: "Effects are disabled for this gauntlet" }, { status: 409 });
+  }
+
   try {
     const result = await prisma.$transaction(async (tx) => {
       const consumed = await tx.gauntletEffect.updateMany({
@@ -107,13 +113,13 @@ export async function POST(request, { params }) {
           gauntletId,
           userId,
           kind: "REWARD_MOVE_WHEEL",
-          remainingUses: { gt: 0 }
+          remainingUses: { gte: cost }
         },
-        data: { remainingUses: { decrement: 1 } }
+        data: { remainingUses: { decrement: cost } }
       });
 
       if (!consumed?.count) {
-        throw new Error("No move-wheel powerups remaining");
+        throw new Error("Not enough move-wheel powerups remaining");
       }
 
       const updatedRoll = await tx.heatRoll.update({

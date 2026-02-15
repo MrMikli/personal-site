@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Plus, Joystick, GamepadDirectional, Gavel } from "lucide-react";
 import GameCard from "@/app/components/GameCard";
 import RollingWheel from "./RollingWheel";
 import styles from "./HeatRollClient.module.css";
@@ -19,14 +20,11 @@ function buildInitialTargets(platforms, defaultGameCounter) {
     return targets;
   }
 
-  const base = Math.max(1, Math.floor(defaultGameCounter / platforms.length));
-  let remaining = defaultGameCounter;
-  platforms.forEach((p, index) => {
-    const value = index === platforms.length - 1
-      ? remaining
-      : Math.max(1, Math.min(base, remaining - (platforms.length - index - 1)));
-    targets[p.id] = value;
-    remaining -= value;
+  // Spread as evenly as possible (difference between any two is at most 1).
+  const base = Math.floor(defaultGameCounter / platforms.length);
+  const remainder = defaultGameCounter - base * platforms.length;
+  platforms.forEach((p, idx) => {
+    targets[p.id] = base + (idx < remainder ? 1 : 0);
   });
   return targets;
 }
@@ -45,9 +43,32 @@ export default function HeatRollClient({
   isHeatOver = false,
   isAdmin = false,
   initialHeatEffects = [],
-  initialEffectInventory = []
+  initialEffectInventory = [],
+  effectsEnabled = true
 }) {
   const router = useRouter();
+
+  const initialConfiguredPool =
+    typeof configuredGameCounter === "number" && configuredGameCounter > 0
+      ? configuredGameCounter
+      : defaultGameCounter;
+  const initialTotalPool =
+    typeof totalGameCounter === "number" && totalGameCounter > 0
+      ? totalGameCounter
+      : initialConfiguredPool;
+  const initialBonusRollsCount =
+    typeof bonusRollsAvailable === "number" && bonusRollsAvailable >= 0
+      ? bonusRollsAvailable
+      : 0;
+
+  const initialHasAnyPowerups = (initialEffectInventory || []).some(
+    (row) => (Number(row?.remainingUses) || 0) > 0
+  );
+  const initialFirstPowerupKind =
+    (initialEffectInventory || []).find((row) => (Number(row?.remainingUses) || 0) > 0)?.kind || null;
+
+  const [isPowerupsOpen, setIsPowerupsOpen] = useState(initialHasAnyPowerups);
+  const [selectedPowerupKind, setSelectedPowerupKind] = useState(initialFirstPowerupKind);
 
   const [inventoryByKind, setInventoryByKind] = useState(() => {
     const base = {
@@ -63,28 +84,109 @@ export default function HeatRollClient({
     return base;
   });
 
+  const hasAnyPowerups = useMemo(
+    () => Object.values(inventoryByKind).some((v) => (Number(v) || 0) > 0),
+    [inventoryByKind]
+  );
+
+  useEffect(() => {
+    // Auto-open if the user gains powerups while on-page.
+    if (!isPowerupsOpen && hasAnyPowerups) setIsPowerupsOpen(true);
+  }, [hasAnyPowerups, isPowerupsOpen]);
+
+  useEffect(() => {
+    // If nothing selected yet, pick the first available powerup.
+    if (selectedPowerupKind) return;
+    const next = Object.entries(inventoryByKind).find(([, v]) => (Number(v) || 0) > 0)?.[0] || null;
+    if (next) setSelectedPowerupKind(next);
+  }, [inventoryByKind, selectedPowerupKind]);
+
+  const powerupDescriptions = useMemo(
+    () => ({
+      REWARD_ROLL_POOL_PLUS_30:
+        "(+3 pool) Adds 3 to this heat's configured pool. Must be activated before you roll anything.",
+      REWARD_BONUS_ROLL_PLATFORM:
+        "(Bonus roll) Adds one extra roll token tied to a platform you choose. Total pool increases, and you can roll the bonus after the configured pool is filled.",
+      REWARD_MOVE_WHEEL:
+        "(Move wheel) While the wheel is visible for the last roll, shift the selection by -2/-1/+1/+2 to pick a different slot. Costs 1 use per space moved.",
+      REWARD_VETO_REROLL:
+        "(Veto reroll) Replaces a rolled game with a different eligible game from the same platform. Costs 1 use per veto reroll."
+    }),
+    []
+  );
+
+  const selectedPowerupDescription = selectedPowerupKind
+    ? powerupDescriptions[selectedPowerupKind] || ""
+    : "Click a powerup to see what it does.";
+
   const [heatEffects, setHeatEffects] = useState(initialHeatEffects || []);
   const [platformOptions, setPlatformOptions] = useState([]);
   const [bonusPlatformId, setBonusPlatformId] = useState("");
+  const [isBonusPlatformPromptOpen, setIsBonusPlatformPromptOpen] = useState(false);
   const [effectsError, setEffectsError] = useState("");
 
+  // Keep heat effects in sync with refreshed server props (router.refresh after activation).
+  useEffect(() => {
+    setHeatEffects(initialHeatEffects || []);
+  }, [initialHeatEffects]);
+
+  const activePoolPlus3Count = useMemo(
+    () => (heatEffects || []).filter((e) => e?.kind === "REWARD_ROLL_POOL_PLUS_30" && (Number(e?.poolDelta) || 0) > 0).length,
+    [heatEffects]
+  );
+
+  const activeBonusByPlatform = useMemo(() => {
+    const active = (heatEffects || []).filter(
+      (e) =>
+        e?.kind === "REWARD_BONUS_ROLL_PLATFORM" &&
+        !e?.consumedAt &&
+        (Number(e?.remainingUses) || 0) > 0
+    );
+
+    const counts = new Map();
+    for (const e of active) {
+      const platformId = e?.platformId || "";
+      const platform = e?.platform || null;
+      const label = platform
+        ? (platform.abbreviation ? `${platform.name} (${platform.abbreviation})` : platform.name)
+        : (platformId ? platformId : "(unknown platform)");
+
+      const key = platformId || label;
+      const prev = counts.get(key) || { label, count: 0 };
+      prev.count += 1;
+      counts.set(key, prev);
+    }
+
+    return Array.from(counts.values());
+  }, [heatEffects]);
+
+  const activeEffectLines = useMemo(() => {
+    const lines = [];
+    if (activePoolPlus3Count > 0) {
+      lines.push(`${activePoolPlus3Count}x +3 pool active`);
+    }
+    for (const entry of activeBonusByPlatform) {
+      lines.push(`${entry.count}x bonus roll active (${entry.label})`);
+    }
+    return lines;
+  }, [activePoolPlus3Count, activeBonusByPlatform]);
+
   const [configuredPool, setConfiguredPool] = useState(
-    typeof configuredGameCounter === "number" && configuredGameCounter > 0
-      ? configuredGameCounter
-      : defaultGameCounter
+    initialConfiguredPool
   );
   const [totalPool, setTotalPool] = useState(
-    typeof totalGameCounter === "number" && totalGameCounter > 0
-      ? totalGameCounter
-      : (typeof configuredGameCounter === "number" && configuredGameCounter > 0
-          ? configuredGameCounter
-          : defaultGameCounter)
+    initialTotalPool
   );
   const [bonusRollsCount, setBonusRollsCount] = useState(
-    typeof bonusRollsAvailable === "number" && bonusRollsAvailable >= 0
-      ? bonusRollsAvailable
-      : 0
+    initialBonusRollsCount
   );
+
+  const rollingRef = useRef(false);
+  const [isRolling, setIsRolling] = useState(false);
+  const [wheel, setWheel] = useState(null);
+  const [wheelAnimationMode, setWheelAnimationMode] = useState("static");
+  const [pendingRoll, setPendingRoll] = useState(null);
+  const [wheelRollId, setWheelRollId] = useState(null);
 
   // Keep pool sizes in sync if the server props change (e.g., after activation + refresh).
   useEffect(() => {
@@ -106,9 +208,10 @@ export default function HeatRollClient({
   const [rolls, setRolls] = useState(initialRolls || []);
   const hasInitialTargets = initialTargets && Object.keys(initialTargets).length > 0;
   const [platformTargets, setPlatformTargets] = useState(
-    hasInitialTargets ? initialTargets : {}
+    hasInitialTargets
+      ? initialTargets
+      : buildInitialTargets(platforms || [], initialConfiguredPool)
   );
-  const [isRolling, setIsRolling] = useState(false);
   const [error, setError] = useState("");
   const [selectedRollId, setSelectedRollId] = useState(null);
   const [finalSelectedGameId, setFinalSelectedGameId] = useState(
@@ -116,8 +219,8 @@ export default function HeatRollClient({
   );
   const [westernRequired, setWesternRequired] = useState(
     typeof initialWesternRequired === "number" && initialWesternRequired > 0
-      ? Math.min(initialWesternRequired, configuredGameCounter ?? defaultGameCounter)
-      : (configuredGameCounter ?? defaultGameCounter)
+      ? Math.min(initialWesternRequired, initialConfiguredPool)
+      : initialConfiguredPool
   );
 
   const [isLocked, setIsLocked] = useState(
@@ -141,15 +244,11 @@ export default function HeatRollClient({
     : Math.max(1, configuredPool - Math.max(platformCount - 1, 0));
 
   const configMismatch = !isLocked && totalConfigured !== configuredPool;
-
-  const [wheel, setWheel] = useState(null);
-  const [pendingRoll, setPendingRoll] = useState(null);
   const audioRef = useRef(null);
   const fadeTimeoutRef = useRef(null);
   const fadeIntervalRef = useRef(null);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.5);
-  const rollingRef = useRef(false);
 
   const effectiveRollCount = rolls.length + (pendingRoll ? 1 : 0);
   const rollsUsedLabel = `${effectiveRollCount} / ${totalPool} rolled`;
@@ -192,7 +291,11 @@ export default function HeatRollClient({
     const nextHasTargets = initialTargets && Object.keys(initialTargets).length > 0;
 
     setRolls(nextRolls);
-    setPlatformTargets(nextHasTargets ? initialTargets : {});
+    setPlatformTargets(
+      nextHasTargets
+        ? initialTargets
+        : buildInitialTargets(platforms || [], configuredPool)
+    );
     setIsLocked(nextHasTargets || nextRolls.length > 0);
     setFinalSelectedGameId(initialSelectedGameId || null);
     setSelectedRollId((prev) => {
@@ -227,6 +330,10 @@ export default function HeatRollClient({
     rollingRef.current = true;
     setIsRolling(true);
     setError("");
+    setEffectsError("");
+
+    // Starting a new roll: prevent move-wheel from applying to the previous roll.
+    setWheelRollId(null);
     // Cancel any in-progress fade-out when starting a new roll
     if (fadeTimeoutRef.current) {
       clearTimeout(fadeTimeoutRef.current);
@@ -283,8 +390,10 @@ export default function HeatRollClient({
           } catch (_e) {}
         }
 
+        setWheelAnimationMode("spin");
         setWheel(json.wheel);
         setPendingRoll(json.roll);
+        setWheelRollId(json.roll.id || null);
       } else if (json?.roll) {
         // Fallback if wheel data is missing
         setRolls((prev) => [...prev, json.roll]);
@@ -305,7 +414,7 @@ export default function HeatRollClient({
   }
 
   async function ensurePlatformOptionsLoaded() {
-    if (platformOptions.length) return;
+    if (platformOptions.length) return platformOptions;
     try {
       const res = await fetch("/api/platforms");
       const json = await res.json().catch(() => null);
@@ -315,20 +424,23 @@ export default function HeatRollClient({
       if (!bonusPlatformId && list[0]?.id) {
         setBonusPlatformId(list[0].id);
       }
+      return list;
     } catch (e) {
       setEffectsError(String(e?.message || e));
+      return [];
     }
   }
 
-  async function handleActivatePowerup(kind) {
+  async function handleActivatePowerup(kind, options = {}) {
     if (isHeatOver) return;
     setEffectsError("");
     try {
       const body = { kind };
       if (kind === "REWARD_BONUS_ROLL_PLATFORM") {
+        const requested = options?.platformId || bonusPlatformId;
         await ensurePlatformOptionsLoaded();
-        if (!bonusPlatformId) throw new Error("Choose a platform first");
-        body.platformId = bonusPlatformId;
+        if (!requested) throw new Error("Choose a platform first");
+        body.platformId = requested;
       }
 
       const res = await fetch(`/api/gauntlet/heats/${heatId}/effects/activate`, {
@@ -369,13 +481,32 @@ export default function HeatRollClient({
     }
   }
 
+  async function openBonusPlatformPrompt() {
+    if (isHeatOver) return;
+    setEffectsError("");
+    const list = await ensurePlatformOptionsLoaded();
+    if (!list.length) {
+      setEffectsError("No platforms available");
+      return;
+    }
+    if (!bonusPlatformId && list[0]?.id) {
+      setBonusPlatformId(list[0].id);
+    }
+    setIsBonusPlatformPromptOpen(true);
+  }
+
   async function handleMoveWheel(delta) {
     if (isHeatOver) return;
-    if (!pendingRoll?.id) return;
+    if (isRolling) return;
+    const cost = Math.abs(Number(delta) || 0);
+    const available = Number(inventoryByKind.REWARD_MOVE_WHEEL) || 0;
+    if (!cost || available < cost) return;
+    const activeRollId = pendingRoll?.id || wheelRollId;
+    if (!activeRollId) return;
     setEffectsError("");
     try {
       const res = await fetch(
-        `/api/gauntlet/heats/${heatId}/rolls/${pendingRoll.id}/move-wheel`,
+        `/api/gauntlet/heats/${heatId}/rolls/${activeRollId}/move-wheel`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -386,10 +517,16 @@ export default function HeatRollClient({
       if (!res.ok) throw new Error(json?.message || "Failed to move wheel");
 
       if (typeof json?.chosenIndex === "number") {
+        // Move-wheel should snap instantly; do not replay the spin animation.
+        setWheelAnimationMode("static");
         setWheel((prev) => (prev ? { ...prev, chosenIndex: json.chosenIndex } : prev));
       }
       if (json?.roll) {
-        setPendingRoll(json.roll);
+        if (pendingRoll?.id && pendingRoll.id === activeRollId) {
+          setPendingRoll(json.roll);
+        } else {
+          setRolls((prev) => prev.map((r) => (r.id === activeRollId ? json.roll : r)));
+        }
       }
       if (typeof json?.remainingMoves === "number") {
         setInventoryByKind((prev) => ({ ...prev, REWARD_MOVE_WHEEL: json.remainingMoves }));
@@ -425,8 +562,12 @@ export default function HeatRollClient({
   function handleWheelComplete() {
     if (pendingRoll) {
       setRolls((prev) => [...prev, pendingRoll]);
+      setWheelRollId(pendingRoll.id || null);
       setPendingRoll(null);
     }
+
+    // After the initial spin finishes, keep the wheel in a static state.
+    setWheelAnimationMode("static");
     // After the wheel stops, let the sound play for 1s more,
     // then fade it out over 0.5s instead of cutting abruptly.
     if (audioRef.current && !isMuted) {
@@ -465,6 +606,29 @@ export default function HeatRollClient({
     }
     setIsRolling(false);
     rollingRef.current = false;
+  }
+
+  const canMoveWheelNow =
+    effectsEnabled &&
+    !isHeatOver &&
+    !isRolling &&
+    (Number(inventoryByKind.REWARD_MOVE_WHEEL) || 0) > 0 &&
+    !!wheelRollId &&
+    !!(wheel?.games?.length);
+
+  const moveWheelUses = Number(inventoryByKind.REWARD_MOVE_WHEEL) || 0;
+  const wheelChosenIndex = typeof wheel?.chosenIndex === "number" ? wheel.chosenIndex : 0;
+  const wheelGameCount = wheel?.games?.length || 0;
+  function canMoveWheelDelta(delta) {
+    if (!canMoveWheelNow) return false;
+    const d = Number(delta) || 0;
+    const cost = Math.abs(d);
+    if (!cost) return false;
+    if (moveWheelUses < cost) return false;
+    const nextIndex = wheelChosenIndex + d;
+    if (nextIndex < 0) return false;
+    if (nextIndex >= wheelGameCount) return false;
+    return true;
   }
 
   function handleVolumeBarClick(event) {
@@ -538,7 +702,6 @@ export default function HeatRollClient({
     }
   }
 
-  const isPoolFull = rolls.length >= defaultGameCounter;
   const isPoolFull = rolls.length >= totalPool;
 
   useEffect(() => {
@@ -639,76 +802,78 @@ export default function HeatRollClient({
     }
   }
 
+  async function handleAdminGrantPowerup(kind) {
+    if (!isAdmin || isHeatOver) return;
+    setEffectsError("");
+    try {
+      const res = await fetch(`/api/admin/heats/${heatId}/powerups/grant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind })
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || "Failed to add powerup");
+      }
+      const totalUses = Number(json?.totalUses);
+      if (Number.isFinite(totalUses)) {
+        setInventoryByKind((prev) => ({ ...prev, [kind]: totalUses }));
+      } else {
+        setInventoryByKind((prev) => ({ ...prev, [kind]: (Number(prev?.[kind]) || 0) + 1 }));
+      }
+      setSelectedPowerupKind(kind);
+      setIsPowerupsOpen(true);
+    } catch (e) {
+      setEffectsError(String(e?.message || e));
+    }
+  }
+
   return (
     <>
-      <section aria-label="Powerups" className={styles.powerupsBox}>
-        <div className={styles.powerupsTitle}>Powerups</div>
-        <div className={styles.powerupsRow}>
-          <div className={styles.powerupChip}>
-            <div className={styles.powerupIcon}>1</div>
-            <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_ROLL_POOL_PLUS_30 || 0}</div>
-            <button
-              type="button"
-              className={styles.powerupButton}
-              disabled={isHeatOver || isLocked || (inventoryByKind.REWARD_ROLL_POOL_PLUS_30 || 0) <= 0}
-              onClick={() => handleActivatePowerup("REWARD_ROLL_POOL_PLUS_30")}
-              title={isLocked ? "Activate before rolling" : "Use on this heat"}
+      {effectsEnabled && isBonusPlatformPromptOpen && (
+        <div
+          className={styles.modalBackdrop}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Choose platform for bonus roll"
+          onClick={() => setIsBonusPlatformPromptOpen(false)}
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalTitle}>Choose a platform for your bonus roll</div>
+            <select
+              className={styles.powerupSelect}
+              value={bonusPlatformId}
+              onChange={(e) => setBonusPlatformId(e.target.value)}
             >
-              Use
-            </button>
-          </div>
-
-          <div className={styles.powerupChip}>
-            <div className={styles.powerupIcon}>2</div>
-            <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_BONUS_ROLL_PLATFORM || 0}</div>
-            <button
-              type="button"
-              className={styles.powerupButton}
-              disabled={isHeatOver || (inventoryByKind.REWARD_BONUS_ROLL_PLATFORM || 0) <= 0}
-              onClick={() => handleActivatePowerup("REWARD_BONUS_ROLL_PLATFORM")}
-              onMouseEnter={() => ensurePlatformOptionsLoaded()}
-            >
-              Use
-            </button>
-          </div>
-
-          <div className={styles.powerupChip}>
-            <div className={styles.powerupIcon}>3</div>
-            <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_MOVE_WHEEL || 0}</div>
-          </div>
-
-          <div className={styles.powerupChip}>
-            <div className={styles.powerupIcon}>4</div>
-            <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_VETO_REROLL || 0}</div>
-          </div>
-        </div>
-
-        <div className={styles.powerupsSubRow}>
-          <div className={styles.powerupsSmallText}>
-            Configured pool: {configuredPool} (base {defaultGameCounter})
-            {bonusRollsCount ? ` + ${bonusRollsCount} bonus` : ""} → Total {totalPool}
-          </div>
-          {(inventoryByKind.REWARD_BONUS_ROLL_PLATFORM || 0) > 0 && (
-            <label className={styles.powerupsSmallText}>
-              Bonus platform:
-              <select
-                className={styles.powerupSelect}
-                value={bonusPlatformId}
-                onChange={(e) => setBonusPlatformId(e.target.value)}
-                onFocus={() => ensurePlatformOptionsLoaded()}
+              {platformOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.abbreviation ? ` (${p.abbreviation})` : ""}
+                </option>
+              ))}
+            </select>
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.powerupButton}
+                onClick={() => setIsBonusPlatformPromptOpen(false)}
               >
-                {platformOptions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}{p.abbreviation ? ` (${p.abbreviation})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.powerupButton}
+                disabled={!bonusPlatformId}
+                onClick={async () => {
+                  setIsBonusPlatformPromptOpen(false);
+                  await handleActivatePowerup("REWARD_BONUS_ROLL_PLATFORM", { platformId: bonusPlatformId });
+                }}
+              >
+                Use
+              </button>
+            </div>
+          </div>
         </div>
-
-        {effectsError ? <div className={styles.effectsError}>{effectsError}</div> : null}
-      </section>
+      )}
 
       <div
         className={styles.configRow}
@@ -801,9 +966,151 @@ export default function HeatRollClient({
             >
               Reset my rolls
             </button>
+
+            {effectsEnabled && (
+              <>
+                <div className={styles.adminText}>
+                  Add powerups to your inventory (testing).
+                </div>
+                <div className={styles.adminPowerupsGrid}>
+                  <button
+                    type="button"
+                    onClick={() => handleAdminGrantPowerup("REWARD_ROLL_POOL_PLUS_30")}
+                    className={styles.adminButton}
+                  >
+                    Add #1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAdminGrantPowerup("REWARD_BONUS_ROLL_PLATFORM")}
+                    className={styles.adminButton}
+                  >
+                    Add #2
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAdminGrantPowerup("REWARD_MOVE_WHEEL")}
+                    className={styles.adminButton}
+                  >
+                    Add #3
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAdminGrantPowerup("REWARD_VETO_REROLL")}
+                    className={styles.adminButton}
+                  >
+                    Add #4
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
+
+      {effectsEnabled && (
+        <section
+          aria-label="Powerups"
+          className={`${styles.powerupsBox} ${!isPowerupsOpen ? styles.powerupsBoxCollapsed : ""}`.trim()}
+        >
+          <div className={styles.powerupsHeaderRow}>
+            <div className={styles.powerupsTitle}>Powerups</div>
+            <button
+              type="button"
+              className={styles.powerupsToggle}
+              aria-label={isPowerupsOpen ? "Collapse powerups" : "Expand powerups"}
+              onClick={() => setIsPowerupsOpen((prev) => !prev)}
+            >
+              {isPowerupsOpen ? "Hide" : "Show"}
+            </button>
+          </div>
+
+          {!isPowerupsOpen ? (
+            <div className={styles.powerupsCollapsedSummary}>
+              {hasAnyPowerups
+                ? "Powerups available. Click Show to use them."
+                : "No powerups yet. Beat heats to earn powerups."}
+            </div>
+          ) : (
+            <>
+              <div className={styles.powerupsRow}>
+                <div
+                  className={`${styles.powerupChip} ${selectedPowerupKind === "REWARD_ROLL_POOL_PLUS_30" ? styles.powerupChipSelected : ""}`.trim()}
+                  onClick={() => setSelectedPowerupKind("REWARD_ROLL_POOL_PLUS_30")}
+                >
+                  <div className={styles.powerupIcon} aria-hidden="true"><Plus size={14} /></div>
+                  <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_ROLL_POOL_PLUS_30 || 0}</div>
+                  <button
+                    type="button"
+                    className={styles.powerupButton}
+                    disabled={isHeatOver || isLocked || (inventoryByKind.REWARD_ROLL_POOL_PLUS_30 || 0) <= 0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleActivatePowerup("REWARD_ROLL_POOL_PLUS_30");
+                    }}
+                    title={isLocked ? "Activate before rolling" : "Use on this heat"}
+                  >
+                    Use
+                  </button>
+                </div>
+
+                <div
+                  className={`${styles.powerupChip} ${selectedPowerupKind === "REWARD_BONUS_ROLL_PLATFORM" ? styles.powerupChipSelected : ""}`.trim()}
+                  onClick={() => setSelectedPowerupKind("REWARD_BONUS_ROLL_PLATFORM")}
+                >
+                  <div className={styles.powerupIcon} aria-hidden="true"><Joystick size={14} /></div>
+                  <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_BONUS_ROLL_PLATFORM || 0}</div>
+                  <button
+                    type="button"
+                    className={styles.powerupButton}
+                    disabled={isHeatOver || (inventoryByKind.REWARD_BONUS_ROLL_PLATFORM || 0) <= 0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openBonusPlatformPrompt();
+                    }}
+                    onMouseEnter={(e) => {
+                      e.stopPropagation();
+                      ensurePlatformOptionsLoaded();
+                    }}
+                  >
+                    Use
+                  </button>
+                </div>
+
+                <div
+                  className={`${styles.powerupChip} ${selectedPowerupKind === "REWARD_MOVE_WHEEL" ? styles.powerupChipSelected : ""}`.trim()}
+                  onClick={() => setSelectedPowerupKind("REWARD_MOVE_WHEEL")}
+                >
+                  <div className={styles.powerupIcon} aria-hidden="true"><GamepadDirectional size={14} /></div>
+                  <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_MOVE_WHEEL || 0}</div>
+                </div>
+
+                <div
+                  className={`${styles.powerupChip} ${selectedPowerupKind === "REWARD_VETO_REROLL" ? styles.powerupChipSelected : ""}`.trim()}
+                  onClick={() => setSelectedPowerupKind("REWARD_VETO_REROLL")}
+                >
+                  <div className={styles.powerupIcon} aria-hidden="true"><Gavel size={14} /></div>
+                  <div className={styles.powerupMeta}>x{inventoryByKind.REWARD_VETO_REROLL || 0}</div>
+                </div>
+              </div>
+
+              <div className={styles.powerupsDescription}>{selectedPowerupDescription}</div>
+
+              {activeEffectLines.length ? (
+                <div className={styles.powerupsActiveEffects}>
+                  {activeEffectLines.map((line) => (
+                    <div key={line} className={styles.powerupsActiveEffectLine}>
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {effectsError ? <div className={styles.effectsError}>{effectsError}</div> : null}
+            </>
+          )}
+        </section>
+      )}
 
       {error && (
         <div className={styles.error}>{error}</div>
@@ -882,21 +1189,46 @@ export default function HeatRollClient({
           chosenIndex={wheel?.chosenIndex}
           startDelayMs={1500}
           slotPlatforms={wheel?.slotPlatforms || null}
+          animationMode={wheelAnimationMode}
           onComplete={handleWheelComplete}
         />
 
-        {pendingRoll && (inventoryByKind.REWARD_MOVE_WHEEL || 0) > 0 && wheel?.games?.length ? (
+        {canMoveWheelNow ? (
           <div className={styles.moveWheelRow}>
-            <button type="button" className={styles.moveWheelButton} onClick={() => handleMoveWheel(-2)}>
+            <button
+              type="button"
+              className={styles.moveWheelButton}
+              onClick={() => handleMoveWheel(-2)}
+              disabled={!canMoveWheelDelta(-2)}
+              title="Costs 2 uses"
+            >
               -2
             </button>
-            <button type="button" className={styles.moveWheelButton} onClick={() => handleMoveWheel(-1)}>
+            <button
+              type="button"
+              className={styles.moveWheelButton}
+              onClick={() => handleMoveWheel(-1)}
+              disabled={!canMoveWheelDelta(-1)}
+              title="Costs 1 use"
+            >
               -1
             </button>
-            <button type="button" className={styles.moveWheelButton} onClick={() => handleMoveWheel(1)}>
+            <button
+              type="button"
+              className={styles.moveWheelButton}
+              onClick={() => handleMoveWheel(1)}
+              disabled={!canMoveWheelDelta(1)}
+              title="Costs 1 use"
+            >
               +1
             </button>
-            <button type="button" className={styles.moveWheelButton} onClick={() => handleMoveWheel(2)}>
+            <button
+              type="button"
+              className={styles.moveWheelButton}
+              onClick={() => handleMoveWheel(2)}
+              disabled={!canMoveWheelDelta(2)}
+              title="Costs 2 uses"
+            >
               +2
             </button>
           </div>

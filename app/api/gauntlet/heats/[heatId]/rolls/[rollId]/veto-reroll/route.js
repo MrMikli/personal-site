@@ -78,7 +78,8 @@ export async function POST(_request, { params }) {
             select: {
               id: true,
               gauntletId: true,
-              defaultGameCounter: true
+              defaultGameCounter: true,
+              gauntlet: { select: { effectsEnabled: true } }
             }
           }
         }
@@ -102,6 +103,11 @@ export async function POST(_request, { params }) {
   const gauntletId = roll.heatSignup.heat?.gauntletId;
   if (!gauntletId) {
     return NextResponse.json({ message: "Missing gauntletId" }, { status: 500 });
+  }
+
+  const effectsEnabled = roll.heatSignup.heat?.gauntlet?.effectsEnabled !== false;
+  if (!effectsEnabled) {
+    return NextResponse.json({ message: "Effects are disabled for this gauntlet" }, { status: 409 });
   }
 
   const chosenPlatformId = roll.platformId;

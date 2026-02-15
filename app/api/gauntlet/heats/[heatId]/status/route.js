@@ -8,10 +8,11 @@ export const dynamic = "force-dynamic";
 const ALLOWED_STATUSES = ["UNBEATEN", "BEATEN", "GIVEN_UP"];
 const TERMINAL_STATUSES = ["BEATEN", "GIVEN_UP"];
 
-function ceil30Pct(base) {
-  const n = Number(base);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.ceil(n * 0.3);
+function clampPoolMinus2(basePool) {
+  const base = Number(basePool);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  // Apply up to -2, but never below 1.
+  return -Math.min(2, Math.max(0, base - 1));
 }
 
 async function awardRewardPowerup({ gauntletId, userId }) {
@@ -25,7 +26,7 @@ async function awardRewardPowerup({ gauntletId, userId }) {
   if (roll === 1) {
     kind = "REWARD_ROLL_POOL_PLUS_30";
     uses = 1;
-    label = "#1 (Roll pool +30% for one heat)";
+    label = "#1 (Roll pool +3 for one heat)";
   } else if (roll === 2) {
     kind = "REWARD_BONUS_ROLL_PLATFORM";
     uses = 1;
@@ -84,6 +85,17 @@ export async function POST(request, { params }) {
     return NextResponse.json({ message: guard.message }, { status: guard.status });
   }
 
+  const heatRow = await prisma.heat.findUnique({
+    where: { id: heatId },
+    select: {
+      gauntletId: true,
+      order: true,
+      defaultGameCounter: true,
+      gauntlet: { select: { effectsEnabled: true } }
+    }
+  });
+  const effectsEnabled = heatRow?.gauntlet?.effectsEnabled !== false;
+
   const body = await request.json().catch(() => ({}));
   const { status } = body || {};
 
@@ -95,13 +107,9 @@ export async function POST(request, { params }) {
 
   // Keep gauntlet membership in sync with any participation.
   try {
-    const heat = await prisma.heat.findUnique({
-      where: { id: heatId },
-      select: { gauntletId: true }
-    });
-    if (heat?.gauntletId) {
+    if (heatRow?.gauntletId) {
       await prisma.gauntlet.update({
-        where: { id: heat.gauntletId },
+        where: { id: heatRow.gauntletId },
         data: { users: { connect: { id: userId } } }
       });
     }
@@ -157,31 +165,29 @@ export async function POST(request, { params }) {
   let punishment = null;
 
   if (isTransition && status === "BEATEN") {
+    if (!effectsEnabled) {
+      reward = null;
+    } else {
     try {
-      const heat = await prisma.heat.findUnique({
-        where: { id: heatId },
-        select: { gauntletId: true }
-      });
-      if (heat?.gauntletId) {
-        reward = await awardRewardPowerup({ gauntletId: heat.gauntletId, userId });
+      if (heatRow?.gauntletId) {
+        reward = await awardRewardPowerup({ gauntletId: heatRow.gauntletId, userId });
       }
     } catch (_e) {
       // ignore reward errors (status update already succeeded)
     }
+    }
   }
 
   if (isTransition && status === "GIVEN_UP") {
+    if (!effectsEnabled) {
+      punishment = null;
+    } else {
     try {
-      const heat = await prisma.heat.findUnique({
-        where: { id: heatId },
-        select: { gauntletId: true, order: true }
-      });
-
-      if (heat?.gauntletId && typeof heat.order === "number") {
+      if (heatRow?.gauntletId && typeof heatRow.order === "number") {
         const nextHeat = await prisma.heat.findFirst({
           where: {
-            gauntletId: heat.gauntletId,
-            order: { gt: heat.order }
+            gauntletId: heatRow.gauntletId,
+            order: { gt: heatRow.order }
           },
           orderBy: { order: "asc" },
           select: { id: true, order: true, name: true, defaultGameCounter: true }
@@ -192,7 +198,7 @@ export async function POST(request, { params }) {
           const base = nextHeat.defaultGameCounter;
           // If base pool is 1, punishment is unavailable (skip).
           if (Number(base) > 1) {
-            const delta = -ceil30Pct(base);
+            const delta = clampPoolMinus2(base);
             const nextRollPool = Math.max(1, Number(base) + delta);
 
             await prisma.heatEffect.create({
@@ -231,6 +237,7 @@ export async function POST(request, { params }) {
       }
     } catch (_e) {
       // ignore punishment errors
+    }
     }
   }
 

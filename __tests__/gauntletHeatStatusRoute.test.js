@@ -75,8 +75,13 @@ describe("/api/gauntlet/heats/[heatId]/status", () => {
     getSession.mockResolvedValueOnce({ user: { id: "u1" } });
     ensureHeatIsMutable.mockResolvedValueOnce({ ok: true });
 
-    // gauntlet membership sync
-    prisma.heat.findUnique.mockResolvedValueOnce({ gauntletId: "g1" });
+    // heat lookup (also used for gauntlet membership sync + reward)
+    prisma.heat.findUnique.mockResolvedValueOnce({
+      gauntletId: "g1",
+      order: 1,
+      defaultGameCounter: 10,
+      gauntlet: { effectsEnabled: true }
+    });
     prisma.gauntlet.update.mockResolvedValueOnce({});
 
     prisma.heatSignup.findUnique.mockResolvedValueOnce({
@@ -86,8 +91,6 @@ describe("/api/gauntlet/heats/[heatId]/status", () => {
     });
     prisma.heatSignup.update.mockResolvedValueOnce({ status: "BEATEN" });
 
-    // reward lookup
-    prisma.heat.findUnique.mockResolvedValueOnce({ gauntletId: "g1" });
     prisma.gauntletEffect.upsert.mockResolvedValueOnce({ remainingUses: 4 });
 
     const req = new Request("http://localhost", {
@@ -112,8 +115,13 @@ describe("/api/gauntlet/heats/[heatId]/status", () => {
     getSession.mockResolvedValueOnce({ user: { id: "u1" } });
     ensureHeatIsMutable.mockResolvedValueOnce({ ok: true });
 
-    // gauntlet membership sync
-    prisma.heat.findUnique.mockResolvedValueOnce({ gauntletId: "g1" });
+    // heat lookup (also used for gauntlet membership sync + punishment)
+    prisma.heat.findUnique.mockResolvedValueOnce({
+      gauntletId: "g1",
+      order: 1,
+      defaultGameCounter: 10,
+      gauntlet: { effectsEnabled: true }
+    });
     prisma.gauntlet.update.mockResolvedValueOnce({});
 
     prisma.heatSignup.findUnique.mockResolvedValueOnce({
@@ -123,8 +131,6 @@ describe("/api/gauntlet/heats/[heatId]/status", () => {
     });
     prisma.heatSignup.update.mockResolvedValueOnce({ status: "GIVEN_UP" });
 
-    // punishment lookup
-    prisma.heat.findUnique.mockResolvedValueOnce({ gauntletId: "g1", order: 1 });
     prisma.heat.findFirst.mockResolvedValueOnce({
       id: "h2",
       order: 2,
@@ -146,7 +152,7 @@ describe("/api/gauntlet/heats/[heatId]/status", () => {
     expect(json.punishment).toMatchObject({
       kind: "PUNISH_ROLL_POOL_MINUS_30",
       nextHeat: { id: "h2", order: 2, name: "Week 2" },
-      nextRollPool: 7
+      nextRollPool: 8
     });
   });
 });

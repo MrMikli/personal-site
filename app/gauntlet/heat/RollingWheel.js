@@ -11,7 +11,14 @@ const CARD_WIDTH = 150; // should stay in sync with GameCard maxWidth
 const SLOT_GAP = 8;
 const VISIBLE_SLOTS = 5;
 
-export default function RollingWheel({ games, chosenIndex, onComplete, startDelayMs = 0, slotPlatforms = null }) {
+export default function RollingWheel({
+  games,
+  chosenIndex,
+  onComplete,
+  startDelayMs = 0,
+  slotPlatforms = null,
+  animationMode = "spin"
+}) {
   const hasGames = Array.isArray(games) && games.length > 0;
 
   if (!hasGames) {
@@ -41,10 +48,13 @@ export default function RollingWheel({ games, chosenIndex, onComplete, startDela
 
   const [finished, setFinished] = useState(false);
 
-  // Reset finished state whenever a new wheel is passed in
+  const shouldAnimate = animationMode === "spin";
+
+  // When spinning: show selector line until animation completes.
+  // When static: immediately render the chosen slot.
   useEffect(() => {
-    setFinished(false);
-  }, [games, chosenIndex]);
+    setFinished(!shouldAnimate);
+  }, [games, chosenIndex, shouldAnimate]);
 
   // Force the motion container to remount whenever the wheel content changes
   // so each roll starts its animation from the same origin, avoiding
@@ -65,26 +75,78 @@ export default function RollingWheel({ games, chosenIndex, onComplete, startDela
         <div id="selector-line" className={styles.selectorLine} />
       )}
 
-      <motion.div
-        key={rollKey}
-        className={styles.strip}
-        initial={{ x: 0, filter: `blur(${startBlurPx}px)` }}
-        animate={{ x: endX, filter: "blur(0px)" }}
-        transition={{
-          x: {
-            delay: startDelayMs / 1000,
-            duration: 7,
-            ease: [0.05, 0.9, 0.25, 1]
-          },
-          filter: {
-            delay: startDelayMs / 1000,
-            duration: 1,
-            ease: "easeOut"
-          }
-        }}
-        onAnimationComplete={handleAnimationComplete}
-      >
-        {stripGames.map((game, idx) => {
+      {shouldAnimate ? (
+        <motion.div
+          key={rollKey}
+          className={styles.strip}
+          initial={{ x: 0, filter: `blur(${startBlurPx}px)` }}
+          animate={{ x: endX, filter: "blur(0px)" }}
+          transition={{
+            x: {
+              delay: startDelayMs / 1000,
+              duration: 7,
+              ease: [0.05, 0.9, 0.25, 1]
+            },
+            filter: {
+              delay: startDelayMs / 1000,
+              duration: 1,
+              ease: "easeOut"
+            }
+          }}
+          onAnimationComplete={handleAnimationComplete}
+        >
+          {stripGames.map((game, idx) => {
+            const isSelected = finished && idx === targetIndex;
+            const slotPlatform = Array.isArray(slotPlatforms)
+              ? slotPlatforms[idx % games.length]
+              : null;
+            const slotPlatformLabel = slotPlatform
+              ? (slotPlatform.abbreviation ? slotPlatform.abbreviation : slotPlatform.name)
+              : null;
+            const backlogSlug = game?.slug || "";
+            const backlogUrl = backlogSlug
+              ? `https://backloggd.com/games/${backlogSlug}/`
+              : null;
+
+            const cardInner = (
+              <div
+                className={`${styles.cardWrap} ${isSelected ? styles.cardWrapSelected : ""}`.trim()}
+              >
+                <GameCard game={game} variant="wheel" platformLabelOverride={slotPlatformLabel} />
+              </div>
+            );
+
+            return (
+              <div
+                key={`${game.id}-${idx}`}
+                className={`${styles.slot} ${isSelected ? styles.slotSelected : ""}`.trim()}
+              >
+                <div
+                  className={styles.slotInner}
+                >
+                  {isSelected && backlogUrl ? (
+                    <Link
+                      href={backlogUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={styles.backlogLink}
+                    >
+                      {cardInner}
+                    </Link>
+                  ) : (
+                    cardInner
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </motion.div>
+      ) : (
+        <div
+          className={styles.strip}
+          style={{ transform: `translateX(${endX}px)`, filter: "blur(0px)" }}
+        >
+          {stripGames.map((game, idx) => {
           const isSelected = finished && idx === targetIndex;
           const slotPlatform = Array.isArray(slotPlatforms)
             ? slotPlatforms[idx % games.length]
@@ -128,8 +190,9 @@ export default function RollingWheel({ games, chosenIndex, onComplete, startDela
               </div>
             </div>
           );
-        })}
-      </motion.div>
+          })}
+        </div>
+      )}
     </div>
   );
 }

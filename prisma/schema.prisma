@@ -112,6 +112,9 @@ model Gauntlet {
   id   String @id @default(cuid())
   name String
 
+  // If false, this gauntlet does not award punishments/powerups and related endpoints are disabled.
+  effectsEnabled Boolean @default(true)
+
   heats Heat[]
   // Implicit M:N relation: gauntlet signups
   users User[]

@@ -18,6 +18,13 @@
   gap: 4px;
 }
 
+.checkboxRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
 .gauntletSelect {
   display: grid;
   gap: 4px;

@@ -116,7 +116,7 @@ export default async function HeatGameSelectionPage({ params }) {
       order: parsed.order
     },
     include: {
-      gauntlet: { select: { id: true, name: true } },
+      gauntlet: { select: { id: true, name: true, effectsEnabled: true } },
       platforms: { select: { id: true, name: true, abbreviation: true } },
       signups: {
         where: { userId: session.user.id },
@@ -175,17 +175,23 @@ export default async function HeatGameSelectionPage({ params }) {
   const initialSelectedGameId = signup?.selectedGameId || null;
   const initialWesternRequired = signup?.westernRequired ?? 0;
 
-  const heatEffects = await prisma.heatEffect.findMany({
-    where: { heatId: heat.id, userId: session.user.id },
-    select: {
-      id: true,
-      kind: true,
-      poolDelta: true,
-      platformId: true,
-      remainingUses: true,
-      consumedAt: true
-    }
-  });
+  const effectsEnabled = heat.gauntlet?.effectsEnabled !== false;
+
+  const heatEffects = effectsEnabled
+    ? await prisma.heatEffect.findMany({
+        where: { heatId: heat.id, userId: session.user.id },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          kind: true,
+          poolDelta: true,
+          platformId: true,
+          platform: { select: { id: true, name: true, abbreviation: true } },
+          remainingUses: true,
+          consumedAt: true
+        }
+      })
+    : [];
 
   const poolDelta = (heatEffects || []).reduce(
     (acc, e) => acc + (Number(e.poolDelta) || 0),
@@ -200,10 +206,12 @@ export default async function HeatGameSelectionPage({ params }) {
   ).length;
   const totalGameCounter = configuredGameCounter + bonusRollsAvailable;
 
-  const effectInventory = await prisma.gauntletEffect.findMany({
-    where: { gauntletId: heat.gauntletId, userId: session.user.id },
-    select: { kind: true, remainingUses: true }
-  });
+  const effectInventory = effectsEnabled
+    ? await prisma.gauntletEffect.findMany({
+        where: { gauntletId: heat.gauntletId, userId: session.user.id },
+        select: { kind: true, remainingUses: true }
+      })
+    : [];
 
   const nowMs2 = Date.now();
 
@@ -298,6 +306,7 @@ export default async function HeatGameSelectionPage({ params }) {
           isAdmin={!!session.user.isAdmin}
           initialHeatEffects={heatEffects}
           initialEffectInventory={effectInventory}
+          effectsEnabled={effectsEnabled}
         />
       </div>
     </div>

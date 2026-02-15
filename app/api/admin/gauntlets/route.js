@@ -12,7 +12,7 @@ export async function GET() {
 
   const gauntlets = await prisma.gauntlet.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true }
+    select: { id: true, name: true, effectsEnabled: true }
   });
   return NextResponse.json({ gauntlets });
 }
@@ -28,10 +28,15 @@ export async function POST(request) {
   if (!name) {
     return NextResponse.json({ message: "Name is required" }, { status: 400 });
   }
-  const data = { name };
+  const effectsEnabled = typeof body.effectsEnabled === "boolean" ? body.effectsEnabled : true;
+
+  const data = { name, effectsEnabled };
 
   try {
-    const created = await prisma.gauntlet.create({ data, select: { id: true, name: true } });
+    const created = await prisma.gauntlet.create({
+      data,
+      select: { id: true, name: true, effectsEnabled: true }
+    });
     return NextResponse.json({ gauntlet: created }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ message: "Failed to create gauntlet" }, { status: 500 });

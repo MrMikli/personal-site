@@ -44,6 +44,25 @@ export default function RulesPage() {
                 After rolling, you must pick one game from your rolled pool to be your target for that heat. <br />
             </div>
 
+            <h3 className={styles.sectionTitle}>Punishments and bonuses</h3>
+            <div>
+                Some gauntlets have optional effects enabled: beating heats earns you a random powerup, and giving up on a heat applies a penalty to your next heat.
+                <br />
+                <br />
+                If you beat a heat, you earn 1 random powerup:
+                <ul>
+                    <li>#1: 1x +3 roll pool for one heat - heat platform restrictions apply</li>
+                    <li>#2: 1x one bonus roll on a platform of free choice</li>
+                    <li>#3: 4x move the wheel selection by 1 slot after spinning </li>
+                    <li>#4: 2x veto - full reroll of a rolled game for any reason </li>
+                </ul>
+                These persist until used (per gauntlet), and you can use them at any time during a heat as long as the conditions for that powerup are met. <br />
+                <br />
+                If you give up on a heat, you get a one-time -2 pool penalty for your next heat (minimum pool is still 1). <br />
+                This means if your next heat would normally have a pool of 10 games, it will be reduced to 8 games. If the heat would normally have a pool of 3 games, it will be reduced to 1 game. <br />
+                The penalty applies even if you use a +3 powerup, so if your next heat would normally have a pool of 10 games and you use a +3 powerup, your pool would be 11 games but then reduced to 9 games after the penalty. <br />
+            </div>
+
             <h3 className={styles.sectionTitle}>Versions</h3>
             <div>
                 You can deviate from the exact roll in two ways: <br />

@@ -5,12 +5,6 @@ import { ensureHeatIsMutable } from "@/lib/heatGuards";
 
 export const dynamic = "force-dynamic";
 
-function ceil30Pct(base) {
-  const n = Number(base);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.ceil(n * 0.3);
-}
-
 async function getHeatPoolState({ heatId, userId, basePool }) {
   const effects = await prisma.heatEffect.findMany({
     where: {
@@ -76,10 +70,19 @@ export async function POST(request, { params }) {
 
   const heat = await prisma.heat.findUnique({
     where: { id: heatId },
-    select: { id: true, gauntletId: true, defaultGameCounter: true }
+    select: {
+      id: true,
+      gauntletId: true,
+      defaultGameCounter: true,
+      gauntlet: { select: { effectsEnabled: true } }
+    }
   });
   if (!heat) {
     return NextResponse.json({ message: "Heat not found" }, { status: 404 });
+  }
+
+  if (heat.gauntlet?.effectsEnabled === false) {
+    return NextResponse.json({ message: "Effects are disabled for this gauntlet" }, { status: 409 });
   }
 
   const inventory = await prisma.gauntletEffect.findUnique({
@@ -114,7 +117,7 @@ export async function POST(request, { params }) {
       }
     }
 
-    const delta = ceil30Pct(heat.defaultGameCounter);
+    const delta = 3;
 
     await prisma.$transaction([
       prisma.gauntletEffect.update({

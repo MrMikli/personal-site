@@ -195,6 +195,7 @@ export async function POST(request, { params }) {
     const heat = await prisma.heat.findUnique({
       where: { id: heatId },
       include: {
+        gauntlet: { select: { effectsEnabled: true } },
         platforms: { select: { id: true, name: true, abbreviation: true } }
       }
     });
@@ -202,6 +203,8 @@ export async function POST(request, { params }) {
     if (!heat) {
       return NextResponse.json({ message: "Heat not found" }, { status: 404 });
     }
+
+    const effectsEnabled = heat.gauntlet?.effectsEnabled !== false;
 
     if (!heat.platforms.length) {
       return NextResponse.json({ message: "No platforms configured for this heat" }, { status: 400 });
@@ -248,22 +251,25 @@ export async function POST(request, { params }) {
       }
     });
 
-    const heatEffects = await prisma.heatEffect.findMany({
-      where: { heatId, userId },
-      select: {
-        id: true,
-        kind: true,
-        poolDelta: true,
-        platformId: true,
-        remainingUses: true,
-        consumedAt: true
-      }
-    });
+    const heatEffects = effectsEnabled
+      ? await prisma.heatEffect.findMany({
+          where: { heatId, userId },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            kind: true,
+            poolDelta: true,
+            platformId: true,
+            remainingUses: true,
+            consumedAt: true
+          }
+        })
+      : [];
 
     const basePool = heat.defaultGameCounter;
-    const poolDelta = sumPoolDelta(heatEffects);
+    const poolDelta = effectsEnabled ? sumPoolDelta(heatEffects) : 0;
     const configuredPool = Math.max(1, Number(basePool) + poolDelta);
-    const bonusEffects = getBonusEffects(heatEffects);
+    const bonusEffects = effectsEnabled ? getBonusEffects(heatEffects) : [];
     const totalAllowed = configuredPool + bonusEffects.length;
 
     const totalExisting = existingRolls.length;

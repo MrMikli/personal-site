@@ -40,6 +40,7 @@ export async function POST(_request, { params }) {
 
   await prisma.$transaction([
     prisma.heatRoll.deleteMany({ where: { heatSignupId: signup.id } }),
+    prisma.heatEffect.deleteMany({ where: { heatId, userId } }),
     prisma.heatSignup.update({
       where: { id: signup.id },
       data: {
