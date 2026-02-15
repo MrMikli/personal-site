@@ -74,3 +74,19 @@
   gap: 8px;
   grid-template-columns: 1fr 1fr;
 }
+
+.dangerRow {
+  margin: 8px 0 4px;
+}
+
+.dangerButton {
+  background: #b00020;
+  color: white;
+  border: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.dangerButton:disabled {
+  opacity: 0.6;
+}

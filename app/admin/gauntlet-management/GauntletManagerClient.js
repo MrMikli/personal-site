@@ -173,6 +173,33 @@ export default function GauntletManagerClient() {
     }
   }
 
+  async function deleteGauntlet() {
+    if (!selectedId) return;
+    const selected = gauntlets.find((g) => g.id === selectedId);
+    const name = selected?.name || "(unknown)";
+
+    const confirmText = window.prompt(
+      `Delete gauntlet "${name}"? This will delete ALL heats, signups, and rolls.\n\nType DELETE to confirm.`
+    );
+    if (confirmText !== "DELETE") return;
+
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/gauntlets/${selectedId}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Failed to delete gauntlet");
+
+      setSelectedId("");
+      setHeats([]);
+      await loadGauntlets();
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className={styles.container}>
       {error && <div className={styles.error}>{error}</div>}
@@ -203,6 +230,14 @@ export default function GauntletManagerClient() {
             ))}
           </select>
         </label>
+
+        {selectedId && (
+          <div className={styles.dangerRow}>
+            <button onClick={deleteGauntlet} disabled={loading} className={styles.dangerButton}>
+              Delete Gauntlet
+            </button>
+          </div>
+        )}
 
         {selectedId && (
           <div className={styles.manageGrid}>
