@@ -1434,14 +1434,14 @@ export default function HeatRollClient({
                     const year = g.releaseDateHuman
                       ? new Date(g.releaseDateHuman).getFullYear()
                       : null;
-                    const platformsLabel = (g.platforms || [])
-                      .map((p) =>
-                        p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name
-                      )
-                      .join(", ");
+                    const rolledPlatformLabel = roll.platform
+                      ? (roll.platform.abbreviation
+                        ? `${roll.platform.name} (${roll.platform.abbreviation})`
+                        : roll.platform.name)
+                      : "";
                     const labelParts = [g.name];
                     if (year) labelParts.push(`(${year})`);
-                    if (platformsLabel) labelParts.push(`- ${platformsLabel}`);
+                    if (rolledPlatformLabel) labelParts.push(`- ${rolledPlatformLabel}`);
                     return (
                       <option key={roll.id} value={roll.id}>
                         {labelParts.join(" ")}

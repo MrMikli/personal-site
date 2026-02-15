@@ -548,8 +548,15 @@
 }
 
 .finalSelect {
-  min-width: 260px;
+  width: 260px;
+  max-width: 100%;
+  min-width: 0;
   padding: 4px;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 26px;
 }
 
 .chooseButton {
