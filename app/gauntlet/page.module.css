@@ -2,3 +2,10 @@
   display: grid;
   gap: 16px;
 }
+
+.sanaeBanner {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
+  max-height : 300px;
+}

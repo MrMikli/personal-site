@@ -240,6 +240,10 @@ export default async function GauntletPage() {
         <h2>Gauntlets</h2>
         <GauntletClient current={current} upcoming={upcoming} previous={previous} />
       </section>
+
+      <div className={styles.sanaeBanner}>
+        <img src="/boomer_sanae.png" alt="Sanae" className={styles.sanaeImage} />
+      </div>
     </div>
   );
 }
