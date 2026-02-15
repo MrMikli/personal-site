@@ -511,13 +511,8 @@ export async function POST(request, { params }) {
   }
 
   // NORMAL roll path
-  const chosenPlatformId = pickPlatformIdByRemaining(targets, existingCounts);
-  if (!chosenPlatformId) {
-    return NextResponse.json({ message: "No remaining rolls available for configured platform targets" }, { status: 400 });
-  }
-
-  // Build a mixed wheel across all platforms that still have remaining target counts,
-  // but force the chosen game to come from the platform selected by remaining-quota logic.
+  // Build a wheel randomly from the pool of all eligible games across every platform
+  // that still has remaining quota. The chosen game comes from a random wheel slot.
   const remainingByPlatformId = Object.entries(targets).reduce((acc, [platformId, target]) => {
     const used = existingCounts[platformId] || 0;
     const rem = Math.max(0, Number(target) - used);
@@ -554,11 +549,6 @@ export async function POST(request, { params }) {
     eligibleIdsByPlatformId[platformId] = shuffleInPlace(ids.map((g) => g.id));
   }
 
-  const eligibleChosen = eligibleIdsByPlatformId[chosenPlatformId] || [];
-  if (!eligibleChosen.length) {
-    return NextResponse.json({ message: "No eligible games available for this platform" }, { status: 400 });
-  }
-
   // Determine a wheel size based on available unique game IDs across remaining platforms.
   const union = new Set();
   for (const pid of platformIdsWithRemaining) {
@@ -572,26 +562,19 @@ export async function POST(request, { params }) {
   const usedInWheel = new Set();
   const wheelSlots = [];
 
-  // Ensure the wheel has a visible mix by seeding some slots from the chosen platform.
-  const seedFromChosen = Math.min(Math.max(1, Math.ceil(take / 2)), eligibleChosen.length, take);
-  while (wheelSlots.length < seedFromChosen && eligibleIdsByPlatformId[chosenPlatformId].length) {
-    const gameId = eligibleIdsByPlatformId[chosenPlatformId].pop();
-    if (!gameId || usedInWheel.has(gameId)) continue;
-    usedInWheel.add(gameId);
-    wheelSlots.push({ gameId, platformId: chosenPlatformId });
-  }
-
+  // Sample from the union without replacement by selecting a platform with probability
+  // proportional to its remaining eligible game count, then popping a random (shuffled) ID.
   function pickPlatformForWheel() {
     const entries = platformIdsWithRemaining
-      .map((pid) => ({ pid, remaining: remainingByPlatformId[pid] || 0 }))
-      .filter((e) => e.remaining > 0 && (eligibleIdsByPlatformId[e.pid] || []).length > 0);
-
+      .map((pid) => ({ pid, remainingEligible: (eligibleIdsByPlatformId[pid] || []).length }))
+      .filter((e) => e.remainingEligible > 0);
     if (!entries.length) return null;
-    const total = entries.reduce((acc, e) => acc + e.remaining, 0);
+
+    const total = entries.reduce((acc, e) => acc + e.remainingEligible, 0);
     let r = Math.floor(Math.random() * total) + 1;
     for (const e of entries) {
-      if (r <= e.remaining) return e.pid;
-      r -= e.remaining;
+      if (r <= e.remainingEligible) return e.pid;
+      r -= e.remainingEligible;
     }
     return entries[0].pid;
   }
@@ -608,12 +591,10 @@ export async function POST(request, { params }) {
       break;
     }
     if (!gameId) {
-      remainingByPlatformId[pid] = 0;
       continue;
     }
     usedInWheel.add(gameId);
     wheelSlots.push({ gameId, platformId: pid });
-    remainingByPlatformId[pid] = Math.max(0, (remainingByPlatformId[pid] || 0) - 1);
   }
 
   // Fetch full game objects, then preserve wheel slot order.
@@ -643,15 +624,13 @@ export async function POST(request, { params }) {
     return p ? { id: p.id, name: p.name, abbreviation: p.abbreviation } : null;
   });
 
-  // Force the chosen index to land on a slot from chosenPlatformId.
-  const chosenIndices = shuffled
-    .map((x, idx) => (x.platformId === chosenPlatformId ? idx : -1))
-    .filter((idx) => idx >= 0);
-  const chosenIndex = chosenIndices.length
-    ? chosenIndices[Math.floor(Math.random() * chosenIndices.length)]
-    : Math.floor(Math.random() * wheelGames.length);
+  const chosenIndex = Math.floor(Math.random() * wheelGames.length);
+  const chosenPlatformId = shuffled?.[chosenIndex]?.platformId || null;
+  const chosenGame = wheelGames[chosenIndex];
 
-    const chosenGame = wheelGames[chosenIndex];
+  if (!chosenGame?.id || !chosenPlatformId) {
+    return NextResponse.json({ message: "No eligible games available for configured platform targets" }, { status: 400 });
+  }
 
     // Order must be unique per signup. After technical veto deletes, roll count no longer
     // corresponds to the highest order, so use max(order)+1.
