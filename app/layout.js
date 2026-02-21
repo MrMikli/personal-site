@@ -35,16 +35,47 @@ export const revalidate = 0;
 export default async function RootLayout({ children }) {
   const session = await getSession();
   const user = session.user;
+
+  const navItems = [
+    {
+      key: "home",
+      show: true,
+      node: (
+        <Link href="/">
+          <img
+            src="/boomer_sanae_cut.png"
+            alt="Home"
+            className={styles.logo}
+          />
+        </Link>
+      ),
+    },
+    { key: "roll-simulator", show: true, node: <Link href="/roll-simulator">Roll simulator</Link> },
+    { key: "gauntlet", show: !!user, node: <Link href="/gauntlet">RGG</Link> },
+    { key: "admin", show: !!user?.isAdmin, node: <Link href="/admin">Admin</Link> },
+    { key: "rules", show: true, node: <Link href="/rules">RGG Rules</Link> },
+  ].filter((item) => item.show);
+
+  const navNodes = navItems.flatMap((item, index) => {
+    const nodes = [<span key={item.key}>{item.node}</span>];
+
+    if (index < navItems.length - 1) {
+      nodes.push(
+        <span key={`${item.key}-sep`} className={styles.navSeparator} aria-hidden="true">
+          |
+        </span>
+      );
+    }
+
+    return nodes;
+  });
+
   return (
     <html lang="en">
       <body>
         <header className={styles.header}>
           <div className={styles.nav}>
-            <Link href="/"><img src="/boomer_sanae_cut.png" alt="Home" className={styles.logo} /></Link> | 
-            <Link href="/roll-simulator">Roll simulator</Link> |
-            {user && <Link href="/gauntlet">RGG</Link>} |
-            {user?.isAdmin && <Link href="/admin">Admin</Link>} |
-            <Link href="/rules">RGG Rules</Link> 
+            {navNodes}
           </div>
           <div className={styles.userArea}>
             {user ? (
