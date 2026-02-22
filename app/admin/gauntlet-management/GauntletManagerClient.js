@@ -122,7 +122,7 @@ export default function GauntletManagerClient() {
       setHName("");
       setHStartsAt("");
       setHEndsAt("");
-      setHDefaultCount(1);
+      setHDefaultCount(10);
       setSelectedPlatformIds([]);
       await loadHeats(selectedId);
     } catch (e) {
