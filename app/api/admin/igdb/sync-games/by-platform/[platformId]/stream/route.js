@@ -1,0 +1,308 @@
+import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/session';
+import { igdbRequest } from '@/lib/igdb';
+import {
+  buildGameCountBody,
+  buildGameQuery,
+  pickEarliestRelease,
+  toCoverBigUrl,
+  hasWesternRelease,
+  hasWesternReleaseForPlatform,
+} from '@/lib/igdbGames';
+
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
+function parsePositiveInt(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.floor(n);
+}
+
+export async function GET(req, { params }) {
+  const session = await getSession();
+  const platformId = params?.platformId;
+
+  const url = new URL(req.url);
+  const clearFirst = url.searchParams.get('clear') === 'true';
+
+  const offset = Math.max(0, parsePositiveInt(url.searchParams.get('offset'), 0));
+  const pageSize = Math.min(500, Math.max(25, parsePositiveInt(url.searchParams.get('pageSize'), 200)));
+  const maxPages = Math.min(5, Math.max(1, parsePositiveInt(url.searchParams.get('maxPages'), 1)));
+
+  const clearCursor = url.searchParams.get('clearCursor') || null;
+  const clearBatchSize = Math.min(200, Math.max(10, parsePositiveInt(url.searchParams.get('clearBatchSize'), 50)));
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      function send(event, data) {
+        controller.enqueue(encoder.encode(`event: ${event}\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      }
+
+      if (!session?.user?.isAdmin) {
+        const isMaskedAdmin = !!session?.user?.isAdminActual && !!session?.user?.isAdminMasked;
+        send('error', {
+          message: isMaskedAdmin
+            ? 'Admin is currently masked (viewing as non-admin). Disable "view as non-admin" to run sync.'
+            : 'Unauthorized'
+        });
+        controller.close();
+        return;
+      }
+
+      if (!platformId || typeof platformId !== 'string') {
+        send('error', { message: 'Invalid platform ID' });
+        controller.close();
+        return;
+      }
+
+      try {
+        const platform = await prisma.platform.findUnique({
+          where: { id: platformId },
+          select: {
+            id: true,
+            name: true,
+            igdbId: true,
+            yearStart: true,
+            yearEnd: true,
+            parentPlatform: { select: { igdbId: true } }
+          }
+        });
+
+        if (!platform) {
+          send('error', { message: 'Platform not found' });
+          controller.close();
+          return;
+        }
+
+        const sourceIgdbId = platform.igdbId ?? platform.parentPlatform?.igdbId ?? null;
+        if (!sourceIgdbId) {
+          send('error', {
+            message:
+              'This platform has no IGDB ID (and no parent platform with an IGDB ID), so it cannot be synced from IGDB.'
+          });
+          controller.close();
+          return;
+        }
+
+        const yearStart = platform.yearStart ?? undefined;
+        const yearEnd = platform.yearEnd ?? undefined;
+
+        // Compute total count first for UI progress (best-effort)
+        const countWhere = buildGameCountBody({ platformIgdbId: sourceIgdbId, yearStart, yearEnd });
+        let totalCount = 0;
+        try {
+          const countRes = await igdbRequest('games/count', countWhere);
+          if (Array.isArray(countRes) && countRes[0]?.count != null) totalCount = countRes[0].count;
+          else if (typeof countRes?.count === 'number') totalCount = countRes.count;
+          else if (typeof countRes === 'number') totalCount = countRes;
+        } catch {}
+        send('total', { total: totalCount });
+
+        if (clearFirst) {
+          // Phase 1: Clear existing data for this platform (chunked)
+          const where = { platforms: { some: { id: platform.id } } };
+
+          const batch = await prisma.game.findMany({
+            where,
+            orderBy: { id: 'asc' },
+            take: clearBatchSize,
+            ...(clearCursor
+              ? {
+                  cursor: { id: clearCursor },
+                  skip: 1
+                }
+              : {}),
+            select: { id: true, platforms: { select: { id: true } } }
+          });
+
+          let processedClear = 0;
+          let disconnected = 0;
+          let deleted = 0;
+          for (const g of batch) {
+            if ((g.platforms?.length || 0) <= 1) {
+              await prisma.game.delete({ where: { id: g.id } });
+              deleted++;
+            } else {
+              await prisma.game.update({
+                where: { id: g.id },
+                data: { platforms: { disconnect: { id: platform.id } } }
+              });
+              await prisma.gamePlatform.deleteMany({
+                where: { gameId: g.id, platformId: platform.id }
+              });
+              disconnected++;
+            }
+            processedClear++;
+            if (processedClear % 10 === 0) {
+              send('clear-progress', { processed: processedClear, disconnected, deleted, batchSize: batch.length });
+            }
+          }
+
+          const next = batch.length === clearBatchSize ? batch[batch.length - 1]?.id : null;
+          const done = !next;
+          send('clear-done', {
+            processed: processedClear,
+            disconnected,
+            deleted,
+            batchSize: batch.length,
+            nextCursor: next,
+            done
+          });
+          send('done', {
+            phase: 'clear',
+            clear: { processed: processedClear, disconnected, deleted, batchSize: batch.length, nextCursor: next, done }
+          });
+          controller.close();
+          return;
+        }
+
+        let processed = 0;
+        let inserted = 0;
+        let updated = 0;
+        let page = 0;
+
+        let localOffset = offset;
+        let lastBatchCount = 0;
+
+        while (page < maxPages) {
+          page += 1;
+          const body = buildGameQuery({
+            platformIgdbId: sourceIgdbId,
+            limit: pageSize,
+            offset: localOffset,
+            yearStart,
+            yearEnd
+          });
+          const games = await igdbRequest('games', body);
+          if (!Array.isArray(games) || games.length === 0) break;
+
+          lastBatchCount = games.length;
+
+          for (const g of games) {
+            const earliest = pickEarliestRelease(g.release_dates);
+            const coverUrl = toCoverBigUrl(g.cover);
+            const western = hasWesternRelease(g.release_dates);
+            const westernForPlatform = hasWesternReleaseForPlatform(g.release_dates, sourceIgdbId);
+
+            const existing = await prisma.game.findUnique({
+              where: { igdbId: g.id },
+              select: { id: true, platforms: { select: { id: true } } }
+            });
+
+            if (!existing) {
+              const created = await prisma.game.create({
+                data: {
+                  igdbId: g.id,
+                  name: g.name,
+                  slug: g.slug ?? null,
+                  coverUrl,
+                  releaseDateUnix: earliest?.unix ?? null,
+                  releaseDateHuman: earliest?.human ?? null,
+                  hasWesternRelease: western,
+                  platforms: { connect: { id: platform.id } }
+                },
+                select: { id: true }
+              });
+
+              await prisma.gamePlatform.upsert({
+                where: { gameId_platformId: { gameId: created.id, platformId: platform.id } },
+                update: { hasWesternRelease: westernForPlatform },
+                create: { gameId: created.id, platformId: platform.id, hasWesternRelease: westernForPlatform }
+              });
+              inserted++;
+            } else {
+              await prisma.game.update({
+                where: { igdbId: g.id },
+                data: {
+                  name: g.name,
+                  slug: g.slug ?? null,
+                  coverUrl,
+                  releaseDateUnix: earliest?.unix ?? null,
+                  releaseDateHuman: earliest?.human ?? null,
+                  hasWesternRelease: western
+                }
+              });
+
+              const alreadyLinked = existing.platforms.some((p) => p.id === platform.id);
+              if (!alreadyLinked) {
+                await prisma.game.update({
+                  where: { igdbId: g.id },
+                  data: { platforms: { connect: { id: platform.id } } }
+                });
+              }
+
+              await prisma.gamePlatform.upsert({
+                where: { gameId_platformId: { gameId: existing.id, platformId: platform.id } },
+                update: { hasWesternRelease: westernForPlatform },
+                create: { gameId: existing.id, platformId: platform.id, hasWesternRelease: westernForPlatform }
+              });
+              updated++;
+            }
+
+            processed++;
+            if (processed % 50 === 0) {
+              send('progress', {
+                page,
+                processed,
+                inserted,
+                updated,
+                pageCount: games.length,
+                total: totalCount,
+                offset: localOffset,
+                pageSize
+              });
+            }
+          }
+
+          send('progress', {
+            page,
+            processed,
+            inserted,
+            updated,
+            pageCount: games.length,
+            total: totalCount,
+            offset: localOffset,
+            pageSize
+          });
+
+          if (games.length < pageSize) break;
+          localOffset += pageSize;
+          if (localOffset > 20000) break;
+        }
+
+        const hasMore = lastBatchCount === pageSize && localOffset <= 20000;
+        const nextOffset = hasMore ? localOffset : null;
+
+        send('done', {
+          phase: 'sync',
+          processed,
+          inserted,
+          updated,
+          hasMore,
+          nextOffset,
+          offset,
+          pageSize,
+          maxPages,
+          total: totalCount
+        });
+        controller.close();
+      } catch (err) {
+        console.error('IGDB sync stream error', err);
+        send('error', { message: err?.message ? String(err.message) : String(err) });
+        controller.close();
+      }
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+      Connection: 'keep-alive'
+    }
+  });
+}

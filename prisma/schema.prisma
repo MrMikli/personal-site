@@ -47,10 +47,19 @@ model User {
 
 model Platform {
   id           String  @id @default(cuid())
-  igdbId       Int     @unique
+  igdbId       Int?    @unique
   name         String
   abbreviation String?
   generation   Int?
+
+  // Optional platform variant support (e.g., "PC (1994-1999)")
+  parentPlatformId String?
+  parentPlatform   Platform? @relation("PlatformVariants", fields: [parentPlatformId], references: [id], onDelete: SetNull)
+  variants         Platform[] @relation("PlatformVariants")
+
+  // Optional release-year range filter for IGDB sync (applies to release_dates.date for this platform)
+  yearStart Int?
+  yearEnd   Int?
 
   games Game[]
   gamePlatforms GamePlatform[]
@@ -64,6 +73,7 @@ model Platform {
   updatedAt DateTime @updatedAt
 
   @@index([name])
+  @@index([parentPlatformId])
 }
 
 model GamePlatform {

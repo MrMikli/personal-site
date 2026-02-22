@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import styles from "./ManagePlatformClient.module.css";
 const Select = dynamic(() => import("react-select"), { ssr: false });
@@ -9,6 +10,7 @@ function formatName(p) {
 }
 
 export default function ManagePlatformClient({ platforms }) {
+  const router = useRouter();
   const [selectedOption, setSelectedOption] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -16,18 +18,30 @@ export default function ManagePlatformClient({ platforms }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [ackClear, setAckClear] = useState(false);
 
+  const [variantLoading, setVariantLoading] = useState(false);
+  const [variantError, setVariantError] = useState(null);
+  const [variantYearStart, setVariantYearStart] = useState(1994);
+  const [variantYearEnd, setVariantYearEnd] = useState(1999);
+
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
   const [bulkError, setBulkError] = useState(null);
 
-  const options = useMemo(() => platforms.map(p => ({ value: p.id, label: formatName(p), igdbId: p.igdbId })), [platforms]);
+  const options = useMemo(() => platforms.map(p => ({ value: p.id, label: formatName(p) })), [platforms]);
   const selected = useMemo(() => {
     if (!selectedOption) return null;
     return platforms.find(p => p.id === selectedOption.value) || null;
   }, [platforms, selectedOption]);
 
+  const canSyncSelected = !!(selected && (selected.igdbId || selected.parentPlatform?.igdbId));
+  const selectedIsVariant = !!(selected && selected.parentPlatformId);
+  const canCreateVariantFromSelected = !!(selected && selected.igdbId);
+
   const platformsWithGames = useMemo(
-    () => platforms.filter((p) => (p?._count?.games ?? 0) > 0 && !!p.igdbId),
+    () =>
+      platforms.filter(
+        (p) => (p?._count?.games ?? 0) > 0 && (!!p.igdbId || !!p.parentPlatform?.igdbId)
+      ),
     [platforms]
   );
 
@@ -103,7 +117,7 @@ export default function ManagePlatformClient({ platforms }) {
     });
   }
 
-  async function syncPlatformChunked(igdbId, { onEvent, onChunkDone } = {}) {
+  async function syncPlatformChunked(platformId, { onEvent, onChunkDone } = {}) {
     // Smaller chunks for Vercel Hobby.
     const pageSize = 100;
     const maxPages = 1;
@@ -112,7 +126,7 @@ export default function ManagePlatformClient({ platforms }) {
     const totals = { processed: 0, inserted: 0, updated: 0, total: null };
 
     while (true) {
-      const url = `/api/admin/igdb/sync-games/${igdbId}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
+      const url = `/api/admin/igdb/sync-games/by-platform/${platformId}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
       const done = await runEventSource(url, { onEvent });
 
       if (done?.phase === 'sync') {
@@ -132,12 +146,16 @@ export default function ManagePlatformClient({ platforms }) {
 
   async function handleSync() {
     if (!selected) return;
+    if (!canSyncSelected) {
+      setError('This platform cannot be synced (no IGDB ID and no parent platform with an IGDB ID).');
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult({ processed: 0, inserted: 0, updated: 0, chunk: null });
 
     try {
-      await syncPlatformChunked(selected.igdbId, {
+      await syncPlatformChunked(selected.id, {
         onEvent: (type, data) => {
           if (type === 'total') {
             setResult((prev) => ({ ...(prev || {}), total: data.total }));
@@ -211,7 +229,7 @@ export default function ManagePlatformClient({ platforms }) {
       }));
 
       try {
-        await syncPlatformChunked(p.igdbId, {
+        await syncPlatformChunked(p.id, {
           onEvent: (type, data) => {
             if (type === 'progress') {
               setBulkResult((prev) => ({
@@ -273,6 +291,10 @@ export default function ManagePlatformClient({ platforms }) {
 
   function handleResyncClearFirst() {
     if (!selected) return;
+    if (!canSyncSelected) {
+      setError('This platform cannot be synced (no IGDB ID and no parent platform with an IGDB ID).');
+      return;
+    }
     setShowConfirm(true);
     setAckClear(false);
   }
@@ -298,7 +320,7 @@ export default function ManagePlatformClient({ platforms }) {
     try {
       // Clear in chunks first
       while (true) {
-        const url = `/api/admin/igdb/sync-games/${selected.igdbId}/stream?clear=true&clearBatchSize=${clearBatchSize}${cursor ? `&clearCursor=${encodeURIComponent(cursor)}` : ''}`;
+        const url = `/api/admin/igdb/sync-games/by-platform/${selected.id}/stream?clear=true&clearBatchSize=${clearBatchSize}${cursor ? `&clearCursor=${encodeURIComponent(cursor)}` : ''}`;
         const done = await runEventSource(url, {
           onEvent: (type, data) => {
             if (type === 'clear-progress') {
@@ -343,7 +365,7 @@ export default function ManagePlatformClient({ platforms }) {
       let currentOffset = 0;
 
       while (true) {
-        const url = `/api/admin/igdb/sync-games/${selected.igdbId}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
+        const url = `/api/admin/igdb/sync-games/by-platform/${selected.id}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
         const done = await runEventSource(url, {
           onEvent: (type, data) => {
             if (type === 'total') {
@@ -444,13 +466,86 @@ export default function ManagePlatformClient({ platforms }) {
             {selected && (
               <>
                 Current number of games for {formatName(selected)}: {selected._count?.games ?? 0}
+                {selectedIsVariant && selected.yearStart && selected.yearEnd ? (
+                  <> (variant range: {selected.yearStart}-{selected.yearEnd})</>
+                ) : null}
               </>
             )}
           </div>
 
+          {canCreateVariantFromSelected && (
+            <div className={styles.bulkBox}>
+              <div className={styles.bulkTitle}>Platform variants</div>
+              <div className={styles.buttons}>
+                <label className={styles.label}>
+                  <span>Start year</span>
+                  <input
+                    type="number"
+                    value={variantYearStart}
+                    min={1950}
+                    max={2100}
+                    onChange={(e) => setVariantYearStart(Number(e.target.value))}
+                    disabled={anyLoading || variantLoading}
+                  />
+                </label>
+                <label className={styles.label}>
+                  <span>End year</span>
+                  <input
+                    type="number"
+                    value={variantYearEnd}
+                    min={1950}
+                    max={2100}
+                    onChange={(e) => setVariantYearEnd(Number(e.target.value))}
+                    disabled={anyLoading || variantLoading}
+                  />
+                </label>
+                <button
+                  onClick={async () => {
+                    if (anyLoading || variantLoading) return;
+                    setVariantLoading(true);
+                    setVariantError(null);
+                    try {
+                      if (!Number.isFinite(variantYearStart) || !Number.isFinite(variantYearEnd)) {
+                        throw new Error('Invalid year range');
+                      }
+                      if (variantYearStart > variantYearEnd) {
+                        throw new Error('Start year must be <= end year');
+                      }
+                      const res = await fetch('/api/admin/platform-variants', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          basePlatformId: selected.id,
+                          yearStart: variantYearStart,
+                          yearEnd: variantYearEnd
+                        })
+                      });
+                      const json = await res.json().catch(() => null);
+                      if (!res.ok) throw new Error(json?.message || 'Failed to create variant');
+                      router.refresh();
+                    } catch (e) {
+                      setVariantError(e?.message || 'Failed to create variants');
+                    } finally {
+                      setVariantLoading(false);
+                    }
+                  }}
+                  disabled={anyLoading || variantLoading}
+                >
+                  {variantLoading ? 'Creating variant…' : 'Create year-range platform'}
+                </button>
+              </div>
+              {variantError && <div className={styles.error}>Error: {variantError}</div>}
+              <div className={styles.note}>
+                Creates a new platform that syncs from this platform’s IGDB catalog, filtered by release year.
+              </div>
+            </div>
+          )}
+
           <div className={styles.buttons}>
             <button onClick={handleSync} disabled={anyLoading}>
-              {anyLoading ? 'Syncing…' : `Sync games for ${formatName(selected || { name: 'selected platform' })}`}
+              {anyLoading
+                ? 'Syncing…'
+                : `Sync games for ${formatName(selected || { name: 'selected platform' })}`}
             </button>
             <button onClick={handleResyncClearFirst} disabled={anyLoading}>
               {anyLoading ? 'Working…' : 'Re-sync (clear first)'}

@@ -21,6 +21,10 @@ export default async function AdminGameManagementPage() {
       igdbId: true,
       name: true,
       abbreviation: true,
+      parentPlatformId: true,
+      parentPlatform: { select: { igdbId: true, name: true } },
+      yearStart: true,
+      yearEnd: true,
       _count: { select: { games: true } }
     },
     orderBy: { name: "asc" }
