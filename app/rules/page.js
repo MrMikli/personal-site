@@ -73,7 +73,7 @@ export default function RulesPage() {
                 In either case, make sure to confirm with your fellow gauntlet participants. <br />
                 Otherwise you must play that game in the exact version that was rolled, whether that be on the actual console, through fan emulation or an official emulation release like Virtual Console or PlayStation Classics, etc. <br />
                 <br />
-                If you roll a collection release of games that were released individually, you get to pick any of them. For example, Duck Hunt and Super Mario Bros. were released together as a cartridge on NES, but also separately on various platforms - if you roll that combined release, you can pick either Duck Hunt or Super Mario Bros. to be your target for that heat. <br />
+                If you roll a collection release of games that were released individually, or a bundle of games (a so-called multicart), you get to pick any of them. For example, Duck Hunt and Super Mario Bros. were released together as a cartridge on NES, but also separately on various platforms - if you roll that combined release, you can pick either Duck Hunt or Super Mario Bros. to be your target for that heat. <br />
             </div>
 
             <h3 className={styles.sectionTitle}>Beating a game</h3>
@@ -82,6 +82,10 @@ export default function RulesPage() {
                 For more arcade style games that don't have any credits, you'll just have to set a goal for a high score or stage that would be widely accepted as "yeah, that bloke seems to have beaten that there videogame". Idk, you figure it out. Talk with the others and set a target.<br />
             </div>
 
+            <h3 className={styles.sectionTitle}>Savestates and speedup</h3>
+            <div>
+                You may use savestates and speedup features as long as they do not give you an advantage in beating the game - they must only save you time, i.e. no savestating in the middle of boss battles or arcade levels, but you can savestate to skip long cutscenes or a long walk to the saveroom (assuming it's not a gameplay challenge). Use your brain or ask other gamers if in doubt. <br />
+            </div>
 
             <h3 className={styles.sectionTitle}>Technical Vetos</h3>
             <div>
