@@ -5,6 +5,13 @@ import { ensureHeatIsMutable } from "@/lib/heatGuards";
 
 export const dynamic = "force-dynamic";
 
+function unixCutoffForMaxYear(maxYear) {
+  const y = Number(maxYear);
+  if (!Number.isFinite(y) || y <= 0) return null;
+  // Exclusive cutoff: Jan 1 of the next year (UTC)
+  return Math.floor(Date.UTC(y + 1, 0, 1) / 1000);
+}
+
 function ceil30Pct(base) {
   const n = Number(base);
   if (!Number.isFinite(n) || n <= 0) return 0;
@@ -219,7 +226,7 @@ export async function POST(request, { params }) {
       where: { id: heatId },
       include: {
         gauntlet: { select: { effectsEnabled: true } },
-        platforms: { select: { id: true, name: true, abbreviation: true } }
+        platforms: { select: { id: true, name: true, abbreviation: true, rollYearEnd: true } }
       }
     });
 
@@ -398,6 +405,10 @@ export async function POST(request, { params }) {
 
   const existingGameIds = existingRolls.map((r) => r.gameId);
 
+  const rollYearEndByPlatformId = new Map(
+    (heat.platforms || []).map((p) => [p.id, typeof p.rollYearEnd === "number" ? p.rollYearEnd : null])
+  );
+
   const isBonusRoll = normalRolls.length >= configuredPool;
 
   // BONUS roll path (from activated powerup #2)
@@ -409,6 +420,15 @@ export async function POST(request, { params }) {
 
     const chosenPlatformId = effect.platformId;
 
+    const chosenPlatform = await prisma.platform.findUnique({
+      where: { id: chosenPlatformId },
+      select: { id: true, name: true, abbreviation: true, rollYearEnd: true }
+    });
+    const chosenPlatformRollYearEnd =
+      typeof chosenPlatform?.rollYearEnd === "number" ? chosenPlatform.rollYearEnd : null;
+    const chosenPlatformCutoffUnix =
+      chosenPlatformRollYearEnd != null ? unixCutoffForMaxYear(chosenPlatformRollYearEnd) : null;
+
     const baseWhere = {
       ...(existingGameIds.length ? { id: { notIn: existingGameIds } } : {})
     };
@@ -417,6 +437,12 @@ export async function POST(request, { params }) {
       where: {
         ...baseWhere,
         platforms: { some: { id: chosenPlatformId } },
+        ...(chosenPlatformCutoffUnix != null
+          ? {
+              // If restricted, require known release date.
+              releaseDateUnix: { lt: chosenPlatformCutoffUnix }
+            }
+          : {}),
         ...(mustBeWestern
           ? {
               gamePlatforms: {
@@ -452,10 +478,12 @@ export async function POST(request, { params }) {
     // Shuffle visual order.
     shuffleInPlace(wheelGames);
 
-    const platform = await prisma.platform.findUnique({
-      where: { id: chosenPlatformId },
-      select: { id: true, name: true, abbreviation: true }
-    });
+    const platform = chosenPlatform
+      ? { id: chosenPlatform.id, name: chosenPlatform.name, abbreviation: chosenPlatform.abbreviation }
+      : await prisma.platform.findUnique({
+          where: { id: chosenPlatformId },
+          select: { id: true, name: true, abbreviation: true }
+        });
 
     const slotPlatforms = wheelGames.map(() =>
       platform ? { id: platform.id, name: platform.name, abbreviation: platform.abbreviation } : null
@@ -531,11 +559,19 @@ export async function POST(request, { params }) {
 
   const eligibleIdsByPlatformId = {};
   for (const platformId of platformIdsWithRemaining) {
+    const rollYearEnd = rollYearEndByPlatformId.get(platformId) || null;
+    const cutoffUnix = rollYearEnd != null ? unixCutoffForMaxYear(rollYearEnd) : null;
     const ids = await prisma.game.findMany({
       where: {
         ...baseWhere,
         platforms: { some: { id: platformId } }
         ,
+        ...(cutoffUnix != null
+          ? {
+              // If restricted, require known release date.
+              releaseDateUnix: { lt: cutoffUnix }
+            }
+          : {}),
         ...(mustBeWestern
           ? {
               gamePlatforms: {

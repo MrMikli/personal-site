@@ -3,6 +3,13 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+function unixCutoffForMaxYear(maxYear) {
+  const y = Number(maxYear);
+  if (!Number.isFinite(y) || y <= 0) return null;
+  // Exclusive cutoff: Jan 1 of the next year (UTC)
+  return Math.floor(Date.UTC(y + 1, 0, 1) / 1000);
+}
+
 function shuffleInPlace(array) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -15,6 +22,10 @@ export async function POST(request) {
   const body = await request.json().catch(() => ({}));
   const platformIds = Array.isArray(body.platformIds) ? body.platformIds : [];
   const onlyWestern = Boolean(body.onlyWestern);
+  const useReleaseYearRestriction = Boolean(body.useReleaseYearRestriction);
+  const overrideYearRaw = body.maxReleaseYear;
+  const overrideYearNum = typeof overrideYearRaw === "string" ? Number(overrideYearRaw) : Number(overrideYearRaw);
+  const overrideYear = Number.isFinite(overrideYearNum) && overrideYearNum > 0 ? Math.floor(overrideYearNum) : null;
 
   if (!platformIds.length) {
     return NextResponse.json(
@@ -23,14 +34,34 @@ export async function POST(request) {
     );
   }
 
+  const platformMeta = await prisma.platform.findMany({
+    where: { id: { in: platformIds } },
+    select: { id: true, name: true, abbreviation: true, rollYearEnd: true }
+  });
+  const rollYearEndByPlatformId = new Map(
+    platformMeta.map((p) => [p.id, typeof p.rollYearEnd === "number" ? p.rollYearEnd : null])
+  );
+  const platformById = new Map(platformMeta.map((p) => [p.id, p]));
+
   // Build a wheel where each slot is associated with one of the selected platforms.
   // This lets the UI show which platform the slot corresponds to.
   const remainingPlatformIds = [...platformIds];
   const eligibleByPlatform = {};
   for (const pid of remainingPlatformIds) {
+    const effectiveMaxYear = useReleaseYearRestriction
+      ? (overrideYear != null ? overrideYear : (rollYearEndByPlatformId.get(pid) || null))
+      : null;
+    const cutoffUnix = effectiveMaxYear != null ? unixCutoffForMaxYear(effectiveMaxYear) : null;
+
     const ids = await prisma.game.findMany({
       where: {
         platforms: { some: { id: pid } },
+        ...(cutoffUnix != null
+          ? {
+              // If a max-year restriction is enabled, require a known release date.
+              releaseDateUnix: { lt: cutoffUnix }
+            }
+          : {}),
         ...(onlyWestern
           ? {
               gamePlatforms: { some: { platformId: pid, hasWesternRelease: true } }
@@ -88,12 +119,6 @@ export async function POST(request) {
       { status: 400 }
     );
   }
-
-  const platformMeta = await prisma.platform.findMany({
-    where: { id: { in: Array.from(new Set(slots.map((s) => s.platformId))) } },
-    select: { id: true, name: true, abbreviation: true }
-  });
-  const platformById = new Map(platformMeta.map((p) => [p.id, p]));
 
   let wheelGames = await prisma.game.findMany({
     where: { id: { in: slots.map((s) => s.gameId) } },

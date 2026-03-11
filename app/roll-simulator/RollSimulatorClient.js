@@ -31,6 +31,18 @@ export default function RollSimulatorClient({ platforms }) {
   });
 
   const [onlyWestern, setOnlyWestern] = useState(() => Boolean(savedConfig?.onlyWestern));
+  const [useReleaseYearRestriction, setUseReleaseYearRestriction] = useState(() =>
+    Boolean(savedConfig?.useReleaseYearRestriction)
+  );
+  const [maxReleaseYear, setMaxReleaseYear] = useState(() => {
+    const raw = savedConfig?.maxReleaseYear;
+    const n = typeof raw === "string" ? Number(raw) : Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    return String(Math.floor(n));
+  });
+  const [maxReleaseYearTouched, setMaxReleaseYearTouched] = useState(() =>
+    Boolean(savedConfig?.maxReleaseYearTouched)
+  );
   const [wheel, setWheel] = useState(null);
   const [isRolling, setIsRolling] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +66,28 @@ export default function RollSimulatorClient({ platforms }) {
   const volumeFillClass = styles[`volumeFill${volumePct}`] || styles.volumeFill0;
 
   const hasAnySelected = selectedPlatformIds.length > 0;
+
+  const selectedPlatforms = useMemo(() => {
+    const set = new Set(selectedPlatformIds);
+    return (platforms || []).filter((p) => set.has(p.id));
+  }, [platforms, selectedPlatformIds]);
+
+  const dbYearSuggestion = useMemo(() => {
+    const years = selectedPlatforms
+      .map((p) => (typeof p.rollYearEnd === "number" ? p.rollYearEnd : null))
+      .filter((y) => typeof y === "number" && Number.isFinite(y) && y > 0);
+    if (!years.length) return null;
+    const unique = Array.from(new Set(years));
+    if (unique.length === 1) return unique[0];
+    return null; // ambiguous
+  }, [selectedPlatforms]);
+
+  useEffect(() => {
+    if (maxReleaseYearTouched) return;
+    if (!useReleaseYearRestriction) return;
+    if (dbYearSuggestion == null) return;
+    setMaxReleaseYear(String(dbYearSuggestion));
+  }, [dbYearSuggestion, maxReleaseYearTouched, useReleaseYearRestriction]);
 
   const selectedIdSet = useMemo(() => new Set(selectedPlatformIds), [selectedPlatformIds]);
   const hasAnyPlatforms = defaultPlatformIds.length > 0;
@@ -213,7 +247,9 @@ export default function RollSimulatorClient({ platforms }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           platformIds: selectedPlatformIds,
-          onlyWestern
+          onlyWestern,
+          useReleaseYearRestriction,
+          maxReleaseYear: maxReleaseYear && String(maxReleaseYear).trim() ? Number(maxReleaseYear) : null
         })
       });
       const json = await res.json().catch(() => null);
@@ -263,12 +299,15 @@ export default function RollSimulatorClient({ platforms }) {
         JSON.stringify({
           platformIds: selectedPlatformIds,
           onlyWestern,
+          useReleaseYearRestriction,
+          maxReleaseYear,
+          maxReleaseYearTouched,
           isMuted,
           volume
         })
       );
     } catch (_e) {}
-  }, [selectedPlatformIds, onlyWestern, isMuted, volume]);
+  }, [selectedPlatformIds, onlyWestern, useReleaseYearRestriction, maxReleaseYear, maxReleaseYearTouched, isMuted, volume]);
 
   return (
     <>
@@ -341,6 +380,52 @@ export default function RollSimulatorClient({ platforms }) {
               Western-region means EU, NA, AU, or Worldwide release flags from
               IGDB.
             </div>
+          </div>
+
+          <div className={styles.yearRestriction}>
+            <label className={styles.yearRestrictionLabel}>
+              <input
+                type="checkbox"
+                checked={useReleaseYearRestriction}
+                onChange={(e) => setUseReleaseYearRestriction(e.target.checked)}
+              />
+              <span>Restrict by max release year</span>
+            </label>
+            <div className={styles.yearRestrictionRow}>
+              <input
+                type="number"
+                inputMode="numeric"
+                placeholder={dbYearSuggestion != null ? String(dbYearSuggestion) : "e.g. 1996"}
+                value={maxReleaseYear}
+                onChange={(e) => {
+                  setMaxReleaseYearTouched(true);
+                  setMaxReleaseYear(e.target.value);
+                }}
+                disabled={!useReleaseYearRestriction}
+                className={styles.yearInput}
+                aria-label="Maximum release year"
+              />
+              <button
+                type="button"
+                className={styles.actionButton}
+                disabled={!useReleaseYearRestriction}
+                onClick={() => {
+                  setMaxReleaseYearTouched(false);
+                  if (dbYearSuggestion != null) setMaxReleaseYear(String(dbYearSuggestion));
+                  else setMaxReleaseYear("");
+                }}
+              >
+                Reset
+              </button>
+            </div>
+            <div className={styles.yearRestrictionHelp}>
+              If enabled and the year is blank, the roll uses each platform&apos;s DB max year (when set).
+            </div>
+            {useReleaseYearRestriction && dbYearSuggestion == null && selectedPlatforms.length > 1 && (
+              <div className={styles.yearRestrictionHelp}>
+                Multiple selected platforms have different max years; leaving the input blank uses per-platform DB values.
+              </div>
+            )}
           </div>
         </div>
       </div>

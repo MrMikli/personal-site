@@ -25,6 +25,7 @@ export default async function AdminGameManagementPage() {
       parentPlatform: { select: { igdbId: true, name: true } },
       yearStart: true,
       yearEnd: true,
+      rollYearEnd: true,
       _count: { select: { games: true } }
     },
     orderBy: { name: "asc" }

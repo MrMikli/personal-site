@@ -12,6 +12,7 @@ export default async function RollSimulatorPage() {
       id: true,
       name: true,
       abbreviation: true,
+      rollYearEnd: true,
       _count: { select: { games: true } }
     },
     orderBy: { name: "asc" }
@@ -21,6 +22,7 @@ export default async function RollSimulatorPage() {
     id: p.id,
     name: p.name,
     abbreviation: p.abbreviation || null,
+    rollYearEnd: typeof p.rollYearEnd === "number" ? p.rollYearEnd : null,
     gamesCount: p._count.games
   }));
 

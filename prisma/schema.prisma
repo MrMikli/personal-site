@@ -61,6 +61,10 @@ model Platform {
   yearStart Int?
   yearEnd   Int?
 
+  // Optional max release year for rolling eligibility (e.g., NES = 1996 means exclude 1997+).
+  // If null, rolling is unrestricted for this platform.
+  rollYearEnd Int?
+
   games Game[]
   gamePlatforms GamePlatform[]
   heats Heat[]

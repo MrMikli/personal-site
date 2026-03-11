@@ -95,6 +95,45 @@
   margin-top: 2px;
 }
 
+.yearRestriction {
+  font-size: 13px;
+  color: #333;
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.yearRestrictionLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.yearRestrictionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.yearInput {
+  width: 120px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 13px;
+}
+
+.yearInput:disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.yearRestrictionHelp {
+  font-size: 11px;
+  color: #666;
+}
+
 .error {
   color: crimson;
   margin-top: 8px;

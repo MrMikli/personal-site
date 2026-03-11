@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import styles from "./ManagePlatformClient.module.css";
@@ -18,6 +18,11 @@ export default function ManagePlatformClient({ platforms }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [ackClear, setAckClear] = useState(false);
 
+  const [rollYearEndInput, setRollYearEndInput] = useState("");
+  const [rollYearEndSaving, setRollYearEndSaving] = useState(false);
+  const [rollYearEndError, setRollYearEndError] = useState(null);
+  const [rollYearEndSuccess, setRollYearEndSuccess] = useState(null);
+
   const [variantLoading, setVariantLoading] = useState(false);
   const [variantError, setVariantError] = useState(null);
   const [variantYearStart, setVariantYearStart] = useState(1994);
@@ -33,6 +38,20 @@ export default function ManagePlatformClient({ platforms }) {
     return platforms.find(p => p.id === selectedOption.value) || null;
   }, [platforms, selectedOption]);
 
+  const selectedId = selectedOption?.value ?? null;
+
+  useEffect(() => {
+    if (!selected) {
+      setRollYearEndInput("");
+      setRollYearEndError(null);
+      setRollYearEndSuccess(null);
+      return;
+    }
+    setRollYearEndInput(selected.rollYearEnd ?? "");
+    setRollYearEndError(null);
+    setRollYearEndSuccess(null);
+  }, [selectedId]);
+
   const canSyncSelected = !!(selected && (selected.igdbId || selected.parentPlatform?.igdbId));
   const selectedIsVariant = !!(selected && selected.parentPlatformId);
   const canCreateVariantFromSelected = !!(selected && selected.igdbId);
@@ -45,7 +64,7 @@ export default function ManagePlatformClient({ platforms }) {
     [platforms]
   );
 
-  const anyLoading = loading || bulkLoading;
+  const anyLoading = loading || bulkLoading || rollYearEndSaving;
 
   const liveChunk = result?.chunk || null;
   const liveProcessed = (result?.processed || 0) + (liveChunk?.processed || 0);
@@ -410,6 +429,34 @@ export default function ManagePlatformClient({ platforms }) {
     }
   }
 
+  async function saveRollYearEnd(nextValue) {
+    if (!selected) return;
+    if (anyLoading) return;
+
+    setRollYearEndSaving(true);
+    setRollYearEndError(null);
+    setRollYearEndSuccess(null);
+
+    try {
+      const res = await fetch('/api/admin/platforms', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platformId: selected.id,
+          rollYearEnd: nextValue
+        })
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message || 'Failed to save roll year end');
+      setRollYearEndSuccess('Saved.');
+      router.refresh();
+    } catch (e) {
+      setRollYearEndError(e?.message || 'Failed to save');
+    } finally {
+      setRollYearEndSaving(false);
+    }
+  }
+
   return (
     <div className={styles.container}>
       <div className={styles.bulkBox}>
@@ -472,6 +519,65 @@ export default function ManagePlatformClient({ platforms }) {
               </>
             )}
           </div>
+
+          {selected && (
+            <div className={styles.bulkBox}>
+              <div className={styles.bulkTitle}>Rolling restrictions</div>
+              <div className={styles.buttons}>
+                <label className={styles.label}>
+                  <span>Max release year (rollYearEnd)</span>
+                  <input
+                    type="number"
+                    value={rollYearEndInput}
+                    min={1950}
+                    max={2100}
+                    placeholder="(none)"
+                    onChange={(e) => {
+                      setRollYearEndInput(e.target.value);
+                      setRollYearEndSuccess(null);
+                      setRollYearEndError(null);
+                    }}
+                    disabled={anyLoading}
+                  />
+                </label>
+                <button
+                  onClick={() => {
+                    if (!selected || anyLoading) return;
+                    const raw = String(rollYearEndInput ?? '').trim();
+                    if (!raw) {
+                      saveRollYearEnd(null);
+                      return;
+                    }
+                    const parsed = Number(raw);
+                    if (!Number.isInteger(parsed) || parsed < 1950 || parsed > 2100) {
+                      setRollYearEndError('Please enter a whole year between 1950 and 2100, or clear it.');
+                      return;
+                    }
+                    saveRollYearEnd(parsed);
+                  }}
+                  disabled={anyLoading}
+                >
+                  {rollYearEndSaving ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (anyLoading) return;
+                    setRollYearEndInput('');
+                    setRollYearEndSuccess(null);
+                    setRollYearEndError(null);
+                  }}
+                  disabled={anyLoading}
+                >
+                  Clear
+                </button>
+              </div>
+              {rollYearEndError && <div className={styles.error}>Error: {rollYearEndError}</div>}
+              {rollYearEndSuccess && <div className={styles.result}>{rollYearEndSuccess}</div>}
+              <div className={styles.note}>
+                If set, gauntlet rolls and the roll simulator can exclude games released after this year for this platform.
+              </div>
+            </div>
+          )}
 
           {canCreateVariantFromSelected && (
             <div className={styles.bulkBox}>
