@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Joystick, GamepadDirectional, Gavel, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight } from "lucide-react";
 import GameCard from "@/app/components/GameCard";
@@ -48,6 +48,17 @@ export default function HeatRollClient({
   effectsEnabled = true
 }) {
   const router = useRouter();
+
+  const [isRefreshing, startRefreshTransition] = useTransition();
+  function refreshServerState() {
+    startRefreshTransition(() => {
+      try {
+        router.refresh();
+      } catch (_e) {
+        // ignore
+      }
+    });
+  }
 
   const initialConfiguredPool =
     typeof configuredGameCounter === "number" && configuredGameCounter > 0
@@ -277,6 +288,16 @@ export default function HeatRollClient({
     hasInitialTargets || (initialRolls && initialRolls.length > 0)
   );
 
+  // Track pool mutations (veto/roll deletion) to prevent racing requests.
+  const [poolMutationCount, setPoolMutationCount] = useState(0);
+  const isPoolMutating = poolMutationCount > 0;
+  function beginPoolMutation() {
+    setPoolMutationCount((c) => c + 1);
+  }
+  function endPoolMutation() {
+    setPoolMutationCount((c) => Math.max(0, c - 1));
+  }
+
   useEffect(() => {
     if (isLocked) return;
     setPlatformTargets(buildInitialTargets(platforms || [], configuredPool));
@@ -329,7 +350,7 @@ export default function HeatRollClient({
 
   // Ensure fresh server-rendered props when revisiting via back/forward.
   useEffect(() => {
-    router.refresh();
+    refreshServerState();
   }, [router]);
 
   // If refreshed data arrives (or route cache is invalidated), resync local state.
@@ -370,6 +391,10 @@ export default function HeatRollClient({
 
   async function handleRoll() {
     if (rollingRef.current || isRolling || isHeatOver) return;
+    if (isRefreshing || isPoolMutating) {
+      setError("Updating your pool… please wait a moment and try again.");
+      return;
+    }
     if (effectiveRollCount >= totalPool) return;
     if (configMismatch) {
       setError(
@@ -525,7 +550,7 @@ export default function HeatRollClient({
         setWesternRequired((prev) => Math.min(Number(prev) || 0, pool?.configuredPool || configuredPool));
       }
 
-      router.refresh();
+      refreshServerState();
     } catch (e) {
       setEffectsError(String(e?.message || e));
     }
@@ -589,7 +614,12 @@ export default function HeatRollClient({
   async function handleVetoReroll(rollId) {
     if (isHeatOver) return;
     if (!rollId) return;
+    if (isRefreshing || isPoolMutating) {
+      setEffectsError("Pool is updating; please wait a moment.");
+      return;
+    }
     setEffectsError("");
+    beginPoolMutation();
     try {
       const res = await fetch(
         `/api/gauntlet/heats/${heatId}/rolls/${rollId}/veto-reroll`,
@@ -616,9 +646,11 @@ export default function HeatRollClient({
       }
 
       // Server-side veto can refund bonus-roll tokens; refresh props to reflect immediately.
-      router.refresh();
+      refreshServerState();
     } catch (e) {
       setEffectsError(String(e?.message || e));
+    } finally {
+      endPoolMutation();
     }
   }
 
@@ -748,6 +780,11 @@ export default function HeatRollClient({
 
   async function handleTechnicalVeto(rollId) {
     if (isHeatOver) return;
+    if (isRefreshing || isPoolMutating) {
+      setError("Pool is updating; please wait a moment.");
+      return;
+    }
+    beginPoolMutation();
     try {
       const res = await fetch(
         `/api/gauntlet/heats/${heatId}/rolls/${rollId}`,
@@ -771,9 +808,11 @@ export default function HeatRollClient({
       }
 
       // Bonus-roll deletes can refund tokens; refresh to show updated Bonus: row.
-      router.refresh();
+      refreshServerState();
     } catch (e) {
       setError(String(e.message || e));
+    } finally {
+      endPoolMutation();
     }
   }
 
@@ -1332,13 +1371,17 @@ export default function HeatRollClient({
           disabled={
             isHeatOver ||
             isRolling ||
+            isRefreshing ||
+            isPoolMutating ||
             rolls.length >= totalPool ||
             configMismatch
           }
-          className={`${styles.rollButton} ${(isHeatOver || isRolling || rolls.length >= totalPool || configMismatch) ? styles.rollButtonDisabled : ""}`.trim()}
+          className={`${styles.rollButton} ${(isHeatOver || isRolling || isRefreshing || isPoolMutating || rolls.length >= totalPool || configMismatch) ? styles.rollButtonDisabled : ""}`.trim()}
         >
           {isHeatOver
             ? "Heat over"
+            : isRefreshing || isPoolMutating
+            ? "Updating pool..."
             : rolls.length >= totalPool || configMismatch
             ? "Can't roll"
             : isRolling
