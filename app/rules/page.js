@@ -85,6 +85,7 @@ export default function RulesPage() {
             <h3 className={styles.sectionTitle}>Savestates and speedup</h3>
             <div>
                 You may use savestates and speedup features as long as they do not give you an advantage in beating the game - they must only save you time, i.e. no savestating in the middle of boss battles or arcade levels, but you can savestate to skip long cutscenes or a long walk to the saveroom (assuming it's not a gameplay challenge). Use your brain or ask other gamers if in doubt. <br />
+                You can basically use savestates anytime you could normally save in the game, or to simulate keeping the console on while you're away from it. 
             </div>
 
             <h3 className={styles.sectionTitle}>Technical Vetos</h3>
