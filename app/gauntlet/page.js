@@ -5,10 +5,33 @@ import { prisma } from "@/lib/prisma";
 import GauntletClient from "./GauntletClient";
 import styles from "./page.module.css";
 import { getUtcDayBoundsMs } from "@/lib/dateOnly";
+import * as path from "node:path";
+import { readdir } from "node:fs/promises";
+import { randomInt } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
+export const runtime = "nodejs";
+
+async function getRandomBannerSrc() {
+  const bannersDir = path.join(process.cwd(), "public", "gauntlet-banners");
+  try {
+    const entries = await readdir(bannersDir, { withFileTypes: true });
+    const candidates = entries
+      .filter((e) => e.isFile())
+      .map((e) => e.name)
+      .filter((name) => /\.(png|jpe?g|webp|gif|avif)$/i.test(name))
+      .sort((a, b) => a.localeCompare(b));
+
+    if (candidates.length === 0) return "/gauntlet-banners/boomer_sanae.png";
+
+    const chosen = candidates[randomInt(0, candidates.length)];
+    return `/gauntlet-banners/${encodeURIComponent(chosen)}`;
+  } catch {
+    return "/gauntlet-banners/boomer_sanae.png";
+  }
+}
 
 export default async function GauntletPage() {
   noStore();
@@ -16,6 +39,8 @@ export default async function GauntletPage() {
   if (!session.user) {
     redirect("/login");
   }
+
+  const bannerSrc = await getRandomBannerSrc();
 
   const nowMs = Date.now();
   const todayUtcMs = (() => {
@@ -235,7 +260,7 @@ export default async function GauntletPage() {
       <h1>Retro Game Gauntlet</h1>
       <p>Welcome, {session.user.username}</p>
       <div className={styles.sanaeBanner}>
-        <img src="/boomer_sanae.png" alt="Sanae" className={styles.sanaeImage} />
+        <img src={bannerSrc} alt="Gauntlet banner" className={styles.sanaeImage} />
       </div>
       <a href="/rules">→ Help, I'm retarded and I don't get it ←</a>
       <section>
