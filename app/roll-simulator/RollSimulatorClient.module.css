@@ -59,9 +59,17 @@
 }
 
 .platformList {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.platformColumn {
   display: grid;
   gap: 8px;
-  margin-top: 4px;
+  min-width: 220px;
 }
 
 .mutedNote {

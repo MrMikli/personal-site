@@ -9,6 +9,16 @@ const STORAGE_KEY = "miklis_roll_simulator_config_v1";
 export default function RollSimulatorClient({ platforms }) {
   const defaultPlatformIds = useMemo(() => platforms.map((p) => p.id), [platforms]);
 
+  const platformColumns = useMemo(() => {
+    const list = Array.isArray(platforms) ? platforms : [];
+    const chunkSize = 10;
+    const columns = [];
+    for (let i = 0; i < list.length; i += chunkSize) {
+      columns.push(list.slice(i, i + chunkSize));
+    }
+    return columns;
+  }, [platforms]);
+
   const savedConfig = useMemo(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -343,28 +353,32 @@ export default function RollSimulatorClient({ platforms }) {
                 No platforms with games were found. Sync some games first.
               </span>
             ) : (
-              platforms.map((p) => {
-                const checked = selectedPlatformIds.includes(p.id);
-                return (
-                  <label
-                    key={p.id}
-                    className={styles.platformRow}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => togglePlatform(p.id)}
-                    />
-                    <span>
-                      {p.name}
-                      {p.abbreviation ? ` (${p.abbreviation})` : ""}
-                      {typeof p.gamesCount === "number"
-                        ? `  ${p.gamesCount} games`
-                        : ""}
-                    </span>
-                  </label>
-                );
-              })
+              platformColumns.map((column, colIndex) => (
+                <div key={`platform-col-${colIndex}`} className={styles.platformColumn}>
+                  {column.map((p) => {
+                    const checked = selectedPlatformIds.includes(p.id);
+                    return (
+                      <label
+                        key={p.id}
+                        className={styles.platformRow}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => togglePlatform(p.id)}
+                        />
+                        <span>
+                          {p.name}
+                          {p.abbreviation ? ` (${p.abbreviation})` : ""}
+                          {typeof p.gamesCount === "number"
+                            ? `  ${p.gamesCount} games`
+                            : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ))
             )}
           </div>
           <div className={styles.western}>
