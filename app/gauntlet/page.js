@@ -3,6 +3,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { getSession } from "../../lib/session";
 import { prisma } from "@/lib/prisma";
 import GauntletClient from "./GauntletClient";
+import GauntletBanner from "./GauntletBanner";
 import styles from "./page.module.css";
 import { getUtcDayBoundsMs } from "@/lib/dateOnly";
 import * as path from "node:path";
@@ -260,7 +261,7 @@ export default async function GauntletPage() {
       <h1>Retro Game Gauntlet</h1>
       <p>Welcome, {session.user.username}</p>
       <div className={styles.sanaeBanner}>
-        <img src={bannerSrc} alt="Gauntlet banner" className={styles.sanaeImage} />
+        <GauntletBanner initialSrc={bannerSrc} alt="Gauntlet banner" className={styles.sanaeImage} />
       </div>
       <a href="/rules">→ Help, I'm retarded and I don't get it ←</a>
       <section>
