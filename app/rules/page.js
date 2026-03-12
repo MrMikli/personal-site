@@ -104,6 +104,10 @@ export default function RulesPage() {
             <div>
                 Look up your console on the <a href="https://emulation.gametechwiki.com/index.php/Main_Page" target="_blank" rel="noopener noreferrer">Emulation Wiki</a> and pick a recommended emulator. Then find a ROM somewhere. Then play the game. Retard. 
             </div>
+
+            <div className={styles.bottomImageWrap}>
+                <img src="/gosh%20bro.jpg" alt="Gosh bro" className={styles.bottomImage} />
+            </div>
         </div>
     );
 }
