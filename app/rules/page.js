@@ -80,6 +80,7 @@ export default function RulesPage() {
             <div>
                 For most linear titles, beating the game is defined as reaching the end credits or ending screen. If there is credits to reach, that must be your objective. <br />
                 For more arcade style games that don't have any credits, you'll just have to set a goal for a high score or stage that would be widely accepted as "yeah, that bloke seems to have beaten that there videogame". Idk, you figure it out. Talk with the others and set a target.<br />
+                If no target can be agreed upon, the game is not eligible for the gauntlet and can be vetoed. <br />
             </div>
 
             <h3 className={styles.sectionTitle}>Savestates and speedup</h3>
