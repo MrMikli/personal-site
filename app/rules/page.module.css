@@ -1,3 +1,13 @@
 .sectionTitle {
     color: #fff458;
 }
+
+.bottomImageWrap {
+    margin-top: 24px;
+    text-align: center;
+}
+
+.bottomImage {
+    max-width: min(900px, 100%);
+    height: auto;
+}
