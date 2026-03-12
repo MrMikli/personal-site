@@ -11,7 +11,7 @@ export default function RollSimulatorClient({ platforms }) {
 
   const platformColumns = useMemo(() => {
     const list = Array.isArray(platforms) ? platforms : [];
-    const chunkSize = 10;
+    const chunkSize = 7;
     const columns = [];
     for (let i = 0; i < list.length; i += chunkSize) {
       columns.push(list.slice(i, i + chunkSize));
