@@ -254,7 +254,7 @@ export default async function HeatGameSelectionPage({ params }) {
         order: { lt: heat.order }
       },
       orderBy: { order: "desc" },
-      select: { id: true, name: true, order: true }
+      select: { id: true, name: true, order: true, endsAt: true }
     });
 
     if (prevHeat) {
@@ -269,7 +269,33 @@ export default async function HeatGameSelectionPage({ params }) {
       const prevStatus = prevSignup?.status || "UNBEATEN";
       previousHeatStatus = prevStatus;
       if (prevStatus !== "BEATEN" && prevStatus !== "GIVEN_UP") {
-        isLockedByPreviousHeat = true;
+        const prevEndBounds = getUtcDayBoundsMs(prevHeat.endsAt);
+        const prevIsOver = prevEndBounds ? nowMs2 > prevEndBounds.end : false;
+
+        if (prevIsOver) {
+          // Auto-timeout: previous heat expired without being marked, so treat as GIVEN_UP.
+          try {
+            await prisma.heatSignup.upsert({
+              where: {
+                heatId_userId: { heatId: prevHeat.id, userId: session.user.id }
+              },
+              create: {
+                heatId: prevHeat.id,
+                userId: session.user.id,
+                status: "GIVEN_UP"
+              },
+              update: {
+                status: "GIVEN_UP"
+              }
+            });
+          } catch (_e) {
+            // ignore
+          }
+          previousHeatStatus = "GIVEN_UP";
+          isLockedByPreviousHeat = false;
+        } else {
+          isLockedByPreviousHeat = true;
+        }
       }
     }
   }

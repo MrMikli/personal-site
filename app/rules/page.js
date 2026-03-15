@@ -23,6 +23,12 @@ export default function RulesPage() {
                 Good luck?
             </div>
 
+            <h3 className={styles.sectionTitle}>Deadline</h3>
+            <div>
+                Each heat has a defined start and end date. You must complete your selected game within this timeframe to earn points. <br />
+                That deadline is always in UTC, so check the RGG page for your local time. If you miss the deadline, your heat is automatically marked as a loss.
+            </div>
+
             <h3 className={styles.sectionTitle}>Rolling</h3>
             <div>
                 Rolling must be witnessed by at least one other participant of that gauntlet to ensure no funny business. <br />

@@ -5,13 +5,17 @@ jest.mock("@/lib/prisma", () => ({
   prisma: {
     heat: { findUnique: jest.fn(), findFirst: jest.fn() },
     gauntlet: { findFirst: jest.fn() },
-    heatSignup: { findFirst: jest.fn(), findUnique: jest.fn() }
+    heatSignup: { findFirst: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() }
   }
 }));
 
 describe("lib/heatGuards ensureHeatIsMutable", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   test("returns 400 when heatId missing", async () => {
@@ -38,5 +42,37 @@ describe("lib/heatGuards ensureHeatIsMutable", () => {
 
     const res = await ensureHeatIsMutable("h1", { userId: "u1" });
     expect(res).toMatchObject({ ok: false, status: 403 });
+  });
+
+  test("auto-marks previous heat as GIVEN_UP after its deadline so the next heat is mutable", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-03-15T12:00:00.000Z"));
+
+    prisma.heat.findUnique.mockResolvedValueOnce({
+      id: "h2",
+      gauntletId: "g1",
+      order: 2,
+      startsAt: "2026-03-15",
+      endsAt: "2026-03-22"
+    });
+
+    prisma.gauntlet.findFirst.mockResolvedValueOnce({ id: "g1" });
+
+    prisma.heat.findFirst.mockResolvedValueOnce({
+      id: "h1",
+      endsAt: "2026-03-08"
+    });
+
+    prisma.heatSignup.findUnique.mockResolvedValueOnce({ status: "UNBEATEN" });
+    prisma.heatSignup.upsert.mockResolvedValueOnce({ status: "GIVEN_UP" });
+
+    const res = await ensureHeatIsMutable("h2", { userId: "u1" });
+    expect(res).toMatchObject({ ok: true });
+    expect(prisma.heatSignup.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { heatId_userId: { heatId: "h1", userId: "u1" } },
+        update: { status: "GIVEN_UP" }
+      })
+    );
   });
 });
