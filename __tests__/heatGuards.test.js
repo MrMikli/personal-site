@@ -5,7 +5,9 @@ jest.mock("@/lib/prisma", () => ({
   prisma: {
     heat: { findUnique: jest.fn(), findFirst: jest.fn() },
     gauntlet: { findFirst: jest.fn() },
-    heatSignup: { findFirst: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() }
+    heatSignup: { findFirst: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() },
+    heatEffect: { deleteMany: jest.fn(), create: jest.fn() },
+    $transaction: jest.fn((ops) => Promise.all(ops))
   }
 }));
 
@@ -53,7 +55,9 @@ describe("lib/heatGuards ensureHeatIsMutable", () => {
       gauntletId: "g1",
       order: 2,
       startsAt: "2026-03-15",
-      endsAt: "2026-03-22"
+      endsAt: "2026-03-22",
+      defaultGameCounter: 5,
+      gauntlet: { effectsEnabled: true }
     });
 
     prisma.gauntlet.findFirst.mockResolvedValueOnce({ id: "g1" });
@@ -65,6 +69,8 @@ describe("lib/heatGuards ensureHeatIsMutable", () => {
 
     prisma.heatSignup.findUnique.mockResolvedValueOnce({ status: "UNBEATEN" });
     prisma.heatSignup.upsert.mockResolvedValueOnce({ status: "GIVEN_UP" });
+    prisma.heatEffect.deleteMany.mockResolvedValueOnce({ count: 0 });
+    prisma.heatEffect.create.mockResolvedValueOnce({ id: "e1" });
 
     const res = await ensureHeatIsMutable("h2", { userId: "u1" });
     expect(res).toMatchObject({ ok: true });
@@ -72,6 +78,47 @@ describe("lib/heatGuards ensureHeatIsMutable", () => {
       expect.objectContaining({
         where: { heatId_userId: { heatId: "h1", userId: "u1" } },
         update: { status: "GIVEN_UP" }
+      })
+    );
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  test("auto-timeout creates a punishment effect on the current heat", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-03-15T12:00:00.000Z"));
+
+    prisma.heat.findUnique.mockResolvedValueOnce({
+      id: "h2",
+      gauntletId: "g1",
+      order: 2,
+      startsAt: "2026-03-15",
+      endsAt: "2026-03-22",
+      defaultGameCounter: 5,
+      gauntlet: { effectsEnabled: true }
+    });
+
+    prisma.gauntlet.findFirst.mockResolvedValueOnce({ id: "g1" });
+    prisma.heat.findFirst.mockResolvedValueOnce({ id: "h1", endsAt: "2026-03-08" });
+    prisma.heatSignup.findUnique.mockResolvedValueOnce({ status: "UNBEATEN" });
+    prisma.heatSignup.upsert.mockResolvedValueOnce({ status: "GIVEN_UP" });
+    prisma.heatEffect.deleteMany.mockResolvedValueOnce({ count: 0 });
+    prisma.heatEffect.create.mockResolvedValueOnce({ id: "e1", poolDelta: -2 });
+
+    const res = await ensureHeatIsMutable("h2", { userId: "u1" });
+    expect(res).toMatchObject({ ok: true });
+    expect(prisma.heatEffect.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { heatId: "h2", userId: "u1", kind: "PUNISH_ROLL_POOL_MINUS_30" }
+      })
+    );
+    expect(prisma.heatEffect.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          heatId: "h2",
+          userId: "u1",
+          kind: "PUNISH_ROLL_POOL_MINUS_30",
+          poolDelta: -2
+        })
       })
     );
   });

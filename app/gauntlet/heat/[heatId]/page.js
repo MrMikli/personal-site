@@ -177,6 +177,82 @@ export default async function HeatGameSelectionPage({ params }) {
 
   const effectsEnabled = heat.gauntlet?.effectsEnabled !== false;
 
+  const clampPoolMinus2Delta = (basePool) => {
+    const base = Number(basePool);
+    if (!Number.isFinite(base) || base <= 0) return 0;
+    return -Math.min(2, Math.max(0, base - 1));
+  };
+
+  // Ensure previous heat timeouts are resolved BEFORE we compute this heat's pool/effects,
+  // so any punishment effect is persisted and reflected immediately.
+  const nowMs2 = Date.now();
+  const prevHeat = await prisma.heat.findFirst({
+    where: {
+      gauntletId: heat.gauntletId,
+      order: { lt: heat.order }
+    },
+    orderBy: { order: "desc" },
+    select: { id: true, name: true, order: true, endsAt: true }
+  });
+
+  let prevHeatStatus = null;
+  let prevHeatIsOver = false;
+  if (prevHeat) {
+    const prevSignup = await prisma.heatSignup.findUnique({
+      where: {
+        heatId_userId: { heatId: prevHeat.id, userId: session.user.id }
+      },
+      select: { status: true }
+    });
+    prevHeatStatus = prevSignup?.status || "UNBEATEN";
+
+    const prevEndBounds = getUtcDayBoundsMs(prevHeat.endsAt);
+    prevHeatIsOver = prevEndBounds ? nowMs2 > prevEndBounds.end : false;
+
+    if (prevHeatIsOver && prevHeatStatus !== "BEATEN" && prevHeatStatus !== "GIVEN_UP") {
+      try {
+        await prisma.$transaction([
+          prisma.heatSignup.upsert({
+            where: {
+              heatId_userId: { heatId: prevHeat.id, userId: session.user.id }
+            },
+            create: {
+              heatId: prevHeat.id,
+              userId: session.user.id,
+              status: "GIVEN_UP"
+            },
+            update: {
+              status: "GIVEN_UP"
+            }
+          }),
+          ...(effectsEnabled && heat.defaultGameCounter > 1
+            ? [
+                prisma.heatEffect.deleteMany({
+                  where: {
+                    heatId: heat.id,
+                    userId: session.user.id,
+                    kind: "PUNISH_ROLL_POOL_MINUS_30"
+                  }
+                }),
+                prisma.heatEffect.create({
+                  data: {
+                    heatId: heat.id,
+                    userId: session.user.id,
+                    kind: "PUNISH_ROLL_POOL_MINUS_30",
+                    poolDelta: clampPoolMinus2Delta(heat.defaultGameCounter),
+                    remainingUses: 1
+                  }
+                })
+              ]
+            : [])
+        ]);
+      } catch (_e) {
+        // ignore
+      }
+      prevHeatStatus = "GIVEN_UP";
+    }
+  }
+
   const heatEffects = effectsEnabled
     ? await prisma.heatEffect.findMany({
         where: { heatId: heat.id, userId: session.user.id },
@@ -192,12 +268,6 @@ export default async function HeatGameSelectionPage({ params }) {
         }
       })
     : [];
-
-  const clampPoolMinus2Delta = (basePool) => {
-    const base = Number(basePool);
-    if (!Number.isFinite(base) || base <= 0) return 0;
-    return -Math.min(2, Math.max(0, base - 1));
-  };
 
   let storedPunishDelta = 0;
   let poolDelta = (() => {
@@ -234,8 +304,6 @@ export default async function HeatGameSelectionPage({ params }) {
       })
     : [];
 
-  const nowMs2 = Date.now();
-
   const startsBounds = getUtcDayBoundsMs(heat.startsAt);
   const opensAtMs = startsBounds ? addUtcDaysMs(startsBounds.start, -1) : null;
   const isHeatNotOpenYet = opensAtMs != null ? nowMs2 < opensAtMs : false;
@@ -247,56 +315,11 @@ export default async function HeatGameSelectionPage({ params }) {
   let isLockedByPreviousHeat = false;
   let previousHeatLabel = null;
   let previousHeatStatus = null;
-  if (!isHeatOver) {
-    const prevHeat = await prisma.heat.findFirst({
-      where: {
-        gauntletId: heat.gauntletId,
-        order: { lt: heat.order }
-      },
-      orderBy: { order: "desc" },
-      select: { id: true, name: true, order: true, endsAt: true }
-    });
-
-    if (prevHeat) {
-      previousHeatLabel = prevHeat.name || `Heat ${prevHeat.order}`;
-      const prevSignup = await prisma.heatSignup.findUnique({
-        where: {
-          heatId_userId: { heatId: prevHeat.id, userId: session.user.id }
-        },
-        select: { status: true }
-      });
-
-      const prevStatus = prevSignup?.status || "UNBEATEN";
-      previousHeatStatus = prevStatus;
-      if (prevStatus !== "BEATEN" && prevStatus !== "GIVEN_UP") {
-        const prevEndBounds = getUtcDayBoundsMs(prevHeat.endsAt);
-        const prevIsOver = prevEndBounds ? nowMs2 > prevEndBounds.end : false;
-
-        if (prevIsOver) {
-          // Auto-timeout: previous heat expired without being marked, so treat as GIVEN_UP.
-          try {
-            await prisma.heatSignup.upsert({
-              where: {
-                heatId_userId: { heatId: prevHeat.id, userId: session.user.id }
-              },
-              create: {
-                heatId: prevHeat.id,
-                userId: session.user.id,
-                status: "GIVEN_UP"
-              },
-              update: {
-                status: "GIVEN_UP"
-              }
-            });
-          } catch (_e) {
-            // ignore
-          }
-          previousHeatStatus = "GIVEN_UP";
-          isLockedByPreviousHeat = false;
-        } else {
-          isLockedByPreviousHeat = true;
-        }
-      }
+  if (!isHeatOver && prevHeat) {
+    previousHeatLabel = prevHeat.name || `Heat ${prevHeat.order}`;
+    previousHeatStatus = prevHeatStatus || "UNBEATEN";
+    if (previousHeatStatus !== "BEATEN" && previousHeatStatus !== "GIVEN_UP" && !prevHeatIsOver) {
+      isLockedByPreviousHeat = true;
     }
   }
 

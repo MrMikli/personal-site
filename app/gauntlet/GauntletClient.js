@@ -365,8 +365,14 @@ export default function GauntletClient({ current, upcoming, previous }) {
                               const prevUser = prev.user || {};
                               const prevStatus = statusByHeatId[prev.id] || prevUser.status || "UNBEATEN";
                               if (prevStatus !== "BEATEN" && prevStatus !== "GIVEN_UP") {
-                                isLockedByPreviousHeat = true;
-                                previousHeatLabel = prev.name || `Heat ${prev.order}`;
+                                // If the previous heat's deadline has passed, it will be auto-timed-out
+                                // to GIVEN_UP server-side on next interaction. Don't block navigation.
+                                const prevEndsBounds = getUtcDayBoundsMs(prev.endsAt);
+                                const prevIsOver = prevEndsBounds ? nowMs > prevEndsBounds.end : false;
+                                if (!prevIsOver) {
+                                  isLockedByPreviousHeat = true;
+                                  previousHeatLabel = prev.name || `Heat ${prev.order}`;
+                                }
                               }
                             }
                           }
