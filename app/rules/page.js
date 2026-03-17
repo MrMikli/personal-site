@@ -102,6 +102,7 @@ export default function RulesPage() {
                 confirm it with you. <br />
                 The same goes for games that aren't available in English language. Note that you're totally allowed to try and beat a fully Japanese/Italian/German game, you just don't have to. <br />
                 You may also veto games you've already played, but you're also allowed to try and beat them again if you want. <br />
+                Educational games should generally be vetoed, assuming they are indeed for kids. Confer with council if in doubt.<br />
             </div>
 
             <h3 className={styles.sectionTitle}>Glitches, Bugs, Exploits, "Cheating"</h3>
