@@ -74,12 +74,13 @@ export default function RulesPage() {
                 You can deviate from the exact roll in two ways: <br />
                 <ol>
                     <li>If the game has a different version of the same game on the same platform (like, Metal Gear Solid 3: Subsistence vs. Metal Gear Solid 3: Snake Eater), you may play whatever version you want.</li>
-                    <li>If the game has a modern port to PC, and the game is reasonably the same (like, The Thing Remastered for PC vs. The Thing on PlayStation 2), you may play it on PC if you find that easier than emulating.</li>
+                    <li>If the game has a port to another console or PC, and the game is reasonably the same (like, The Thing Remastered for PC vs. The Thing on PlayStation 2, or a PS2 version of a game rolled for Xbox), you may play it on whatever platform if you find that easier to emulate. This applies as long as it is the same exact game outside of minor visual or performance differences.</li>
                 </ol>
                 In either case, make sure to confirm with your fellow gauntlet participants. <br />
                 Otherwise you must play that game in the exact version that was rolled, whether that be on the actual console, through fan emulation or an official emulation release like Virtual Console or PlayStation Classics, etc. <br />
                 <br />
                 If you roll a collection release of games that were released individually, or a bundle of games (a so-called multicart), you get to pick any of them. For example, Duck Hunt and Super Mario Bros. were released together as a cartridge on NES, but also separately on various platforms - if you roll that combined release, you can pick either Duck Hunt or Super Mario Bros. to be your target for that heat. <br />
+                For a game collection like a 30-in-1 NES cartridge, you can also pick any game as your target. 
             </div>
 
             <h3 className={styles.sectionTitle}>Beating a game</h3>
