@@ -3,7 +3,7 @@
 - Add release years to `GamePlatform` table instead of just storing the initial release date
 - Instead of just release region, tie language support into it (western release OR english language?)
 - Add themes, keywords, and genres to games
-- Add filter for educational games 
+- Add filter for educational games (kids+educational themes on igdb?) 
     - sports?
     - celebrity tie-in?
     - exceptions? Disney maybe? 
@@ -16,8 +16,9 @@
     1. Filter specific themes, keywords, or genres (exclude or include)
     2. Filter from series? (maybe publisher or developer, series might be too powerful, but this also might be too powerful)
     3. Filter rarity?
-    4. Yoink someone elses game roll (steal or just copy idk)
+    4. Yoink someone elses game roll (steal or just copy idk) - possibly roll from previously picked games
     5. Literally just pick a game!? (low %chance)
+    6. Curated pick by other random participant (leader, loser?)
 - Remove veto power-up
 - Profile showcases - games beaten / custom awards
 - Add password reset lol
@@ -31,3 +32,4 @@
     - more
 - Look into grabbing Backloggd rating via scrape..?
 - Rare roll sounds (GOLD GOLD GOLD GOLD)
+- DEATHRUN GAUNTLET: 24 hours per game, only top shelf games, one game for all participants, whoever makes the least progress each game (unless everyone completes) is eliminated

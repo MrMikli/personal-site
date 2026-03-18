@@ -20,9 +20,13 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, onVe
     }
   }
 
-  const backlogSlug = game.slug || "";
-  const backlogUrl = backlogSlug
-    ? `https://backloggd.com/games/${backlogSlug}/`
+  const slug = game.slug || "";
+  const backlogUrl = slug
+    ? `https://backloggd.com/games/${slug}/`
+    : null;
+
+  const igdbUrl = slug 
+    ? `https://www.igdb.com/games/${slug}` 
     : null;
 
   const platformsLabel =
@@ -35,6 +39,15 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, onVe
   const isWheel = variant === "wheel";
 
   const [menuOpen, setMenuOpen] = useState(false);
+
+  function handleCoverClick(e) {
+    if (!e?.shiftKey) return;
+    if (!igdbUrl) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(igdbUrl, "_blank", "noopener,noreferrer");
+  }
 
   function handleMenuToggle(e) {
     e.preventDefault();
@@ -75,7 +88,12 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, onVe
   return (
     <div className={`${styles.card} ${isWheel ? styles.cardWheel : ""}`.trim()}>
       {backlogUrl && variant === "pool" ? (
-        <Link href={backlogUrl} target="_blank" rel="noreferrer">
+        <Link
+          href={backlogUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={handleCoverClick}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={game.coverUrl || "/placeholder-cover.png"}

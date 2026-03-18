@@ -1398,7 +1398,7 @@ export default function HeatRollClient({
           <span className={styles.poolMeta}>{rollsUsedLabel}</span>
         </div>
         <div className={styles.poolTip}>
-            Tip: Click on a game in the pool to visit the Backloggd page for that game.
+            Tip: Click on a game in the pool to visit the Backloggd page for that game. Shift-click to open IGDB page instead.
         </div>
         {rolls.length === 0 ? (
           <p className={styles.poolEmpty}>
