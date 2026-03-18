@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import GameCard from "@/app/components/GameCard";
 import styles from "./RollingWheel.module.css";
 
@@ -103,9 +102,9 @@ export default function RollingWheel({
             const slotPlatformLabel = slotPlatform
               ? (slotPlatform.abbreviation ? slotPlatform.abbreviation : slotPlatform.name)
               : null;
-            const backlogSlug = game?.slug || "";
-            const backlogUrl = backlogSlug
-              ? `https://backloggd.com/games/${backlogSlug}/`
+            const slug = game?.slug || "";
+            const backlogddUrl = slug
+              ? `https://backloggd.com/games/${slug}/`
               : null;
 
             const cardInner = (
@@ -124,15 +123,15 @@ export default function RollingWheel({
                 <div
                   className={styles.slotInner}
                 >
-                  {isSelected && backlogUrl ? (
-                    <Link
-                      href={backlogUrl}
+                  {isSelected && backlogddUrl ? (
+                    <a
+                      href={backlogddUrl}
                       target="_blank"
                       rel="noreferrer"
                       className={styles.backlogLink}
                     >
                       {cardInner}
-                    </Link>
+                    </a>
                   ) : (
                     cardInner
                   )}
@@ -154,9 +153,9 @@ export default function RollingWheel({
           const slotPlatformLabel = slotPlatform
             ? (slotPlatform.abbreviation ? slotPlatform.abbreviation : slotPlatform.name)
             : null;
-          const backlogSlug = game?.slug || "";
-          const backlogUrl = backlogSlug
-            ? `https://backloggd.com/games/${backlogSlug}/`
+          const slug = game?.slug || "";
+          const backlogddUrl = slug
+            ? `https://backloggd.com/games/${slug}/`
             : null;
 
           const cardInner = (
@@ -175,15 +174,15 @@ export default function RollingWheel({
               <div
                 className={styles.slotInner}
               >
-                {isSelected && backlogUrl ? (
-                  <Link
-                    href={backlogUrl}
+                {isSelected && backlogddUrl ? (
+                  <a
+                    href={backlogddUrl}
                     target="_blank"
                     rel="noreferrer"
                     className={styles.backlogLink}
                   >
                     {cardInner}
-                  </Link>
+                  </a>
                 ) : (
                   cardInner
                 )}

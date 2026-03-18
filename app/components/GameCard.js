@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import styles from "./GameCard.module.css";
 
 export default function GameCard({ game, variant = "pool", onTechnicalVeto, onVetoReroll, platformLabelOverride = null }) {
@@ -25,10 +24,6 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, onVe
     ? `https://backloggd.com/games/${slug}/`
     : null;
 
-  const igdbUrl = slug 
-    ? `https://www.igdb.com/games/${slug}` 
-    : null;
-
   const platformsLabel =
     typeof platformLabelOverride === "string" && platformLabelOverride.trim()
       ? platformLabelOverride.trim()
@@ -39,15 +34,6 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, onVe
   const isWheel = variant === "wheel";
 
   const [menuOpen, setMenuOpen] = useState(false);
-
-  function handleCoverClick(e) {
-    if (!e?.shiftKey) return;
-    if (!igdbUrl) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    window.open(igdbUrl, "_blank", "noopener,noreferrer");
-  }
 
   function handleMenuToggle(e) {
     e.preventDefault();
@@ -88,11 +74,10 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, onVe
   return (
     <div className={`${styles.card} ${isWheel ? styles.cardWheel : ""}`.trim()}>
       {backlogUrl && variant === "pool" ? (
-        <Link
+        <a
           href={backlogUrl}
           target="_blank"
           rel="noreferrer"
-          onClick={handleCoverClick}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -102,7 +87,7 @@ export default function GameCard({ game, variant = "pool", onTechnicalVeto, onVe
             loading="lazy"
             decoding="async"
           />
-        </Link>
+        </a>
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
