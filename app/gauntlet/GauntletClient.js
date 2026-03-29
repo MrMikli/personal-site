@@ -475,7 +475,7 @@ export default function GauntletClient({ current, upcoming, previous }) {
                   </div>
                   <p className={styles.tableDisclaimer}>
                     Dates are shown and calculated in UTC. <br />
-                    This means an end date finishes at 23:59 UTC.
+                    This means an end date finishes at 23:59 UTC on the listed day and a start date starts at 00:00 UTC on the listed day. <br />
                   </p>
                 </>
                 )}
