@@ -709,6 +709,7 @@ export default function HeatRollClient({
     !isRolling &&
     (Number(inventoryByKind.REWARD_MOVE_WHEEL) || 0) > 0 &&
     !!wheelRollId &&
+    typeof wheel?.chosenIndex === "number" &&
     !!(wheel?.games?.length);
 
   const moveWheelUses = Number(inventoryByKind.REWARD_MOVE_WHEEL) || 0;
@@ -720,9 +721,9 @@ export default function HeatRollClient({
     const cost = Math.abs(d);
     if (!cost) return false;
     if (moveWheelUses < cost) return false;
-    const nextIndex = wheelChosenIndex + d;
-    if (nextIndex < 0) return false;
-    if (nextIndex >= wheelGameCount) return false;
+    if (wheelGameCount <= 1) return false;
+    const nextIndex = (((wheelChosenIndex + d) % wheelGameCount) + wheelGameCount) % wheelGameCount;
+    if (nextIndex === wheelChosenIndex) return false;
     return true;
   }
 

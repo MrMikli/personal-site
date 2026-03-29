@@ -71,10 +71,15 @@ export async function POST(request, { params }) {
     return NextResponse.json({ message: "Wheel data is invalid" }, { status: 500 });
   }
 
+  if (gameIds.length <= 1) {
+    return NextResponse.json({ message: "Wheel has no alternate slots" }, { status: 400 });
+  }
+
   const currentIndex = Number(roll.wheel.chosenIndex) || 0;
-  const nextIndex = currentIndex + delta;
-  if (nextIndex < 0 || nextIndex >= gameIds.length) {
-    return NextResponse.json({ message: "Move would go out of bounds" }, { status: 400 });
+  const rawNext = currentIndex + delta;
+  const nextIndex = ((rawNext % gameIds.length) + gameIds.length) % gameIds.length;
+  if (nextIndex === currentIndex) {
+    return NextResponse.json({ message: "Move would not change selection" }, { status: 400 });
   }
 
   const nextGameId = gameIds[nextIndex];
