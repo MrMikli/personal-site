@@ -350,6 +350,7 @@ export default function GauntletClient({ current, upcoming, previous }) {
                           const startsBounds = getUtcDayBoundsMs(h.startsAt);
                           const opensAtMs = startsBounds ? addUtcDaysMs(startsBounds.start, -1) : null;
                           const isHeatNotOpenYet = opensAtMs != null ? nowMs < opensAtMs : false;
+                          const startsLocalLabel = startsBounds ? formatLocalDateTime(startsBounds.start) : "";
 
                           const endsBounds = getUtcDayBoundsMs(h.endsAt);
                           const isHeatOver = endsBounds ? nowMs > endsBounds.end : false;
@@ -380,7 +381,14 @@ export default function GauntletClient({ current, upcoming, previous }) {
                           return (
                             <tr key={h.id}>
                               <td>{h.name || `Heat ${h.order}`}</td>
-                              <td>{formatDate(h.startsAt)}</td>
+                              <td>
+                                <div>{formatDate(h.startsAt)}</div>
+                                {!!startsLocalLabel && (
+                                  <div className={styles.cellMeta}>
+                                    Starts {startsLocalLabel} (your time)
+                                  </div>
+                                )}
+                              </td>
                               <td>
                                 <div>{formatDate(h.endsAt)}</div>
                                 {!!endsLocalLabel && (
