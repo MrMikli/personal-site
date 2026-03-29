@@ -46,3 +46,54 @@
   font-size: 12px;
   opacity: 0.85;
 }
+
+.heatHeaderExpanded {
+  display: grid;
+  gap: 4px;
+}
+
+.heatHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.heatToggleButton {
+  padding: 2px 8px;
+  border-radius: 8px;
+  border: 1px solid #2d2d2d;
+  background: #0f0f0f;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.heatToggleButton:hover {
+  background: #181818;
+}
+
+.heatHeaderCollapsed {
+  min-width: 54px;
+  width: 54px;
+  max-width: 54px;
+  padding-left: 6px;
+  padding-right: 6px;
+  text-align: center;
+}
+
+.heatHeaderCollapsedInner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.heatHeaderEllipsis {
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.heatCellCollapsed {
+  padding-left: 6px;
+  padding-right: 6px;
+}
