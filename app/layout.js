@@ -80,7 +80,7 @@ export default async function RootLayout({ children }) {
           <div className={styles.userArea}>
             {user ? (
               <>
-                <Link href={`/gauntlet/users/${encodeURIComponent(user.username)}`} className={styles.userLink}>
+                <Link href={`/profile/${encodeURIComponent(user.username)}`} className={styles.userLink}>
                   <PersonIcon className={styles.userIcon} />
                   <span className={styles.username}>{user.username}</span>
                 </Link>

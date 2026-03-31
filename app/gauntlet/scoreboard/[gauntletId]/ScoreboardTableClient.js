@@ -142,7 +142,7 @@ export default function ScoreboardTableClient({
                     </div>
                     <Link
                       className={styles.seeRollsLink}
-                      href={`/gauntlet/users/${encodeURIComponent(
+                      href={`/profile/${encodeURIComponent(
                         p.username
                       )}?gauntletId=${encodeURIComponent(gauntletId)}`}
                     >
