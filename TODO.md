@@ -3,10 +3,10 @@
 - Add release years to `GamePlatform` table instead of just storing the initial release date
 - Instead of just release region, tie language support into it (western release OR english language?)
 - Add themes, keywords, and genres to games
-- Add filter for educational games (kids+educational themes on igdb?) 
-    - sports?
-    - celebrity tie-in?
-    - exceptions? Disney maybe? 
+- Add filter for educational games (kids+educational themes on igdb?)
+  - sports?
+  - celebrity tie-in?
+  - exceptions? Disney maybe?
 - Shift click to go to IGDB directly instead of backloggd
 - Add backloggd link to visible sides of roll when roll finishes
 - Minimum filter on plays on IGDB? Could be a powerup or tied to rarity powerup
@@ -26,10 +26,10 @@
 - UX overhaul
 - Music jukebox on roll page (synced? radio feed..?)
 - Overhaul punishments (several different ones to roll between, off-site rules?)
-    - must review game 
-    - change discord profile pic
-    - discord role
-    - more
+  - must review game
+  - change discord profile pic
+  - discord role
+  - more
 - Look into grabbing Backloggd rating via scrape..?
 - Rare roll sounds (GOLD GOLD GOLD GOLD)
 - DEATHRUN GAUNTLET: 24 hours per game, only top shelf games, one game for all participants, whoever makes the least progress each game (unless everyone completes) is eliminated
