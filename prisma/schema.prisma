@@ -3,8 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Non-pooled connection for prisma migrate; its advisory lock times out through Neon's pooler.
+  directUrl = env("DIRECT_URL")
 }
 
 enum HeatSignupStatus {
@@ -54,7 +56,7 @@ model Platform {
 
   // Optional platform variant support (e.g., "PC (1994-1999)")
   parentPlatformId String?
-  parentPlatform   Platform? @relation("PlatformVariants", fields: [parentPlatformId], references: [id], onDelete: SetNull)
+  parentPlatform   Platform?  @relation("PlatformVariants", fields: [parentPlatformId], references: [id], onDelete: SetNull)
   variants         Platform[] @relation("PlatformVariants")
 
   // Optional release-year range filter for IGDB sync (applies to release_dates.date for this platform)
@@ -65,11 +67,11 @@ model Platform {
   // If null, rolling is unrestricted for this platform.
   rollYearEnd Int?
 
-  games Game[]
+  games         Game[]
   gamePlatforms GamePlatform[]
-  heats Heat[]
+  heats         Heat[]
   // Rolled games in signups optionally reference a platform
-  rolls HeatRoll[] @relation("HeatRollPlatform")
+  rolls         HeatRoll[]     @relation("HeatRollPlatform")
 
   heatEffects HeatEffect[] @relation("HeatEffectPlatform")
 
@@ -81,8 +83,8 @@ model Platform {
 }
 
 model GamePlatform {
-  gameId           String
-  platformId       String
+  gameId            String
+  platformId        String
   hasWesternRelease Boolean @default(false)
 
   game     Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
@@ -112,9 +114,9 @@ model Game {
   platforms         Platform[]
   gamePlatforms     GamePlatform[]
   // Per-user selected game for a heat
-  selectedInSignups HeatSignup[] @relation("HeatSignupSelectedGame")
+  selectedInSignups HeatSignup[]   @relation("HeatSignupSelectedGame")
   // Rolled appearances across signups
-  rolls             HeatRoll[]   @relation("HeatRollGame")
+  rolls             HeatRoll[]     @relation("HeatRollGame")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -166,11 +168,11 @@ model Heat {
 // Inventory of powerups per user per gauntlet.
 // Punishments are stored as HeatEffect rows and do not live in inventory.
 model GauntletEffect {
-  id        String     @id @default(cuid())
+  id         String   @id @default(cuid())
   gauntletId String
-  gauntlet  Gauntlet   @relation(fields: [gauntletId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gauntlet   Gauntlet @relation(fields: [gauntletId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   kind          EffectKind
   remainingUses Int        @default(0)
@@ -203,7 +205,7 @@ model HeatEffect {
   bonusRolls HeatRoll[] @relation("BonusHeatEffect")
 
   // For consumables that produce an action within a heat (e.g., bonus roll token).
-  remainingUses Int      @default(1)
+  remainingUses Int       @default(1)
   consumedAt    DateTime?
 
   createdAt DateTime @default(now())
@@ -239,21 +241,21 @@ model HeatSignup {
 }
 
 model HeatRoll {
-  id           String     @id @default(cuid())
+  id           String         @id @default(cuid())
   heatSignupId String
-  heatSignup   HeatSignup @relation(fields: [heatSignupId], references: [id])
+  heatSignup   HeatSignup     @relation(fields: [heatSignupId], references: [id])
   gameId       String
-  game         Game       @relation("HeatRollGame", fields: [gameId], references: [id])
+  game         Game           @relation("HeatRollGame", fields: [gameId], references: [id])
   platformId   String?
-  platform     Platform?  @relation("HeatRollPlatform", fields: [platformId], references: [id])
+  platform     Platform?      @relation("HeatRollPlatform", fields: [platformId], references: [id])
   order        Int
   source       HeatRollSource @default(NORMAL)
 
   bonusHeatEffectId String?
   bonusHeatEffect   HeatEffect? @relation("BonusHeatEffect", fields: [bonusHeatEffectId], references: [id], onDelete: SetNull)
 
-  wheel HeatRollWheel?
-  createdAt    DateTime   @default(now())
+  wheel     HeatRollWheel?
+  createdAt DateTime       @default(now())
 
   @@unique([heatSignupId, order])
   @@index([heatSignupId])
