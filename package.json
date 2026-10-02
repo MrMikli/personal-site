@@ -11,7 +11,9 @@
     "test:watch": "jest --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "db:seed": "node --env-file=.env.local prisma/seed.mjs",
+    "db:seed:clean": "node --env-file=.env.local prisma/seed.mjs --clean"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",

@@ -54,6 +54,8 @@ Useful Scripts
 - `test`: runs Jest.
 - `test:watch`: runs Jest in watch mode.
 - `prisma:push`: `prisma db push` convenience alias.
+- `db:seed`: recreates test players (`seed_*`, password `seed-password`) and `[seed]` gauntlets on the dev database. Only runs against the dev Neon branch; see `prisma/seed.mjs`.
+- `db:seed:clean`: removes the seed data.
 
 Testing
 -------
