@@ -91,6 +91,12 @@ export default function GauntletClient({ current, upcoming, previous }) {
     router.refresh();
   }, [router]);
 
+  // Local-time labels depend on the browser's time zone, so only render them after hydration.
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   const [selectedSection, setSelectedSection] = useState(
     current.length ? "current" : upcoming.length ? "upcoming" : previous.length ? "previous" : "current"
   );
@@ -350,11 +356,11 @@ export default function GauntletClient({ current, upcoming, previous }) {
                           const startsBounds = getUtcDayBoundsMs(h.startsAt);
                           const opensAtMs = startsBounds ? addUtcDaysMs(startsBounds.start, -1) : null;
                           const isHeatNotOpenYet = opensAtMs != null ? nowMs < opensAtMs : false;
-                          const startsLocalLabel = startsBounds ? formatLocalDateTime(startsBounds.start) : "";
+                          const startsLocalLabel = hasMounted && startsBounds ? formatLocalDateTime(startsBounds.start) : "";
 
                           const endsBounds = getUtcDayBoundsMs(h.endsAt);
                           const isHeatOver = endsBounds ? nowMs > endsBounds.end : false;
-                          const endsLocalLabel = endsBounds ? formatLocalDateTime(endsBounds.end) : "";
+                          const endsLocalLabel = hasMounted && endsBounds ? formatLocalDateTime(endsBounds.end) : "";
 
                           const effectiveButtonLabel = isHeatOver ? "View roll pool" : buttonLabel;
 
