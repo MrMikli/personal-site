@@ -45,3 +45,6 @@ funny games site.code-workspace
 # Claude Code
 /.claude/
 /CLAUDE.md
+
+# VSCode
+.vscode/settings.json
