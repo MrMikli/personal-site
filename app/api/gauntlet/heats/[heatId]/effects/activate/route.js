@@ -2,31 +2,18 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { ensureHeatIsMutable } from "@/lib/heatGuards";
+import {
+  BONUS_ROLL_KIND,
+  POOL_REWARD_DELTA,
+  sumPoolDelta,
+  hasStoredPunishment,
+  punishmentDelta,
+  configuredPool,
+  isUnusedBonusRoll,
+  gaveUpPreviousHeat
+} from "@/lib/heatPool";
 
 export const dynamic = "force-dynamic";
-
-function clampPoolMinus2Delta(basePool) {
-  const base = Number(basePool);
-  if (!Number.isFinite(base) || base <= 0) return 0;
-  // Apply up to -2, but never below 1.
-  return -Math.min(2, Math.max(0, base - 1));
-}
-
-function sumPoolDeltaWithPunishClamp(effects, basePool) {
-  const rows = effects || [];
-  let other = 0;
-  let punish = 0;
-  for (const e of rows) {
-    const d = Number(e?.poolDelta) || 0;
-    if (!d) continue;
-    if (e?.kind === "PUNISH_ROLL_POOL_MINUS_30") punish += d;
-    else other += d;
-  }
-  punish = Math.min(0, punish);
-  const maxPunish = clampPoolMinus2Delta(basePool);
-  const punishClamped = Math.max(punish, maxPunish);
-  return other + punishClamped;
-}
 
 async function getHeatPoolState({ heatId, userId, basePool, gauntletId, heatOrder }) {
   const effects = await prisma.heatEffect.findMany({
@@ -35,7 +22,7 @@ async function getHeatPoolState({ heatId, userId, basePool, gauntletId, heatOrde
       userId,
       OR: [
         { poolDelta: { not: null } },
-        { kind: "REWARD_BONUS_ROLL_PLATFORM" }
+        { kind: BONUS_ROLL_KIND }
       ]
     },
     select: {
@@ -46,43 +33,20 @@ async function getHeatPoolState({ heatId, userId, basePool, gauntletId, heatOrde
     }
   });
 
-  let poolDelta = sumPoolDeltaWithPunishClamp(effects, basePool);
-
-  const hasStoredPunishEffect = (effects || []).some(
-    (e) => e?.kind === "PUNISH_ROLL_POOL_MINUS_30" && (Number(e?.poolDelta) || 0) < 0
-  );
-  if (!hasStoredPunishEffect && gauntletId && typeof heatOrder === "number") {
-    const prevHeat = await prisma.heat.findFirst({
-      where: { gauntletId, order: { lt: heatOrder } },
-      orderBy: { order: "desc" },
-      select: { id: true }
-    });
-    if (prevHeat?.id) {
-      const prevSignup = await prisma.heatSignup.findUnique({
-        where: { heatId_userId: { heatId: prevHeat.id, userId } },
-        select: { status: true }
-      });
-      if (prevSignup?.status === "GIVEN_UP") {
-        poolDelta += clampPoolMinus2Delta(basePool);
-      }
-    }
+  let { poolDelta } = sumPoolDelta(effects, basePool);
+  if (!hasStoredPunishment(effects) && (await gaveUpPreviousHeat({ gauntletId, heatOrder, userId }))) {
+    poolDelta += punishmentDelta(basePool);
   }
 
-  const configuredPool = Math.max(1, Number(basePool) + poolDelta);
-
-  const bonusRolls = effects.filter(
-    (e) =>
-      e.kind === "REWARD_BONUS_ROLL_PLATFORM" &&
-      !e.consumedAt &&
-      (Number(e.remainingUses) || 0) > 0
-  ).length;
+  const configured = configuredPool(basePool, poolDelta);
+  const bonusRolls = effects.filter(isUnusedBonusRoll).length;
 
   return {
     basePool: Number(basePool),
     poolDelta,
-    configuredPool,
+    configuredPool: configured,
     bonusRolls,
-    totalPool: configuredPool + bonusRolls
+    totalPool: configured + bonusRolls
   };
 }
 
@@ -162,7 +126,7 @@ export async function POST(request, { params }) {
       }
     }
 
-    const delta = 3;
+    const delta = POOL_REWARD_DELTA;
 
     await prisma.$transaction([
       prisma.gauntletEffect.update({

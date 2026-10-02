@@ -1,6 +1,6 @@
 import Link from "next/link";
 import "./globals.css";
-import { getSession } from "../lib/session";
+import { getSession } from "@/lib/session";
 import styles from "./layout.module.css";
 import AdminMaskToggle from "./AdminMaskToggle";
 

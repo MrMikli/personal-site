@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSession } from "../../lib/session";
+import { getSession } from "@/lib/session";
 import UsersList from "./users-list";
 import styles from "./page.module.css";
 

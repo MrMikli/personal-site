@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
-import { getSession } from "../../lib/session";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import GauntletClient from "./GauntletClient";
 import GauntletBanner from "./GauntletBanner";

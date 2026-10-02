@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { getSession } from '../../../lib/session';
+import { getSession } from '@/lib/session';
 import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';

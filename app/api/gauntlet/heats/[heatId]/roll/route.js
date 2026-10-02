@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { ensureHeatIsMutable } from "@/lib/heatGuards";
+import {
+  sumPoolDelta,
+  hasStoredPunishment,
+  punishmentDelta,
+  configuredPool as computeConfiguredPool,
+  isUnusedBonusRoll,
+  gaveUpPreviousHeat
+} from "@/lib/heatPool";
 
 export const dynamic = "force-dynamic";
 
@@ -117,41 +125,10 @@ function shuffleInPlace(array) {
   return array;
 }
 
-function clampPoolMinus2Delta(basePool) {
-  const base = Number(basePool);
-  if (!Number.isFinite(base) || base <= 0) return 0;
-  // Apply up to -2, but never below 1.
-  return -Math.min(2, Math.max(0, base - 1));
-}
-
-function sumPoolDelta(heatEffects, basePool) {
-  const effects = heatEffects || [];
-  let other = 0;
-  let punish = 0;
-
-  for (const e of effects) {
-    const d = Number(e?.poolDelta) || 0;
-    if (!d) continue;
-    if (e?.kind === "PUNISH_ROLL_POOL_MINUS_30") punish += d;
-    else other += d;
-  }
-
-  // Punishment is a one-time -2 (min pool 1). Never allow it to stack.
-  punish = Math.min(0, punish);
-  const maxPunish = clampPoolMinus2Delta(basePool);
-  const punishClamped = Math.max(punish, maxPunish);
-
-  return other + punishClamped;
-}
-
+// The roll route only counts bonus tokens that have a platform to roll on.
 function getBonusEffects(heatEffects) {
   return (heatEffects || []).filter(
-    (e) =>
-      e.kind === "REWARD_BONUS_ROLL_PLATFORM" &&
-      !e.consumedAt &&
-      (Number(e.remainingUses) || 0) > 0 &&
-      typeof e.platformId === "string" &&
-      e.platformId
+    (e) => isUnusedBonusRoll(e) && typeof e.platformId === "string" && e.platformId
   );
 }
 
@@ -298,31 +275,16 @@ export async function POST(request, { params }) {
 
     const basePool = heat.defaultGameCounter;
     let virtualPunishDelta = 0;
-    if (effectsEnabled && typeof heat?.order === "number") {
-      const hasStoredPunishEffect = (heatEffects || []).some(
-        (e) => e?.kind === "PUNISH_ROLL_POOL_MINUS_30" && (Number(e?.poolDelta) || 0) < 0
-      );
-      if (!hasStoredPunishEffect) {
-        const prevHeat = await prisma.heat.findFirst({
-          where: { gauntletId: heat.gauntletId, order: { lt: heat.order } },
-          orderBy: { order: "desc" },
-          select: { id: true }
-        });
-
-        if (prevHeat?.id) {
-          const prevSignup = await prisma.heatSignup.findUnique({
-            where: { heatId_userId: { heatId: prevHeat.id, userId } },
-            select: { status: true }
-          });
-          if (prevSignup?.status === "GIVEN_UP") {
-            virtualPunishDelta = clampPoolMinus2Delta(basePool);
-          }
-        }
-      }
+    if (
+      effectsEnabled &&
+      !hasStoredPunishment(heatEffects) &&
+      (await gaveUpPreviousHeat({ gauntletId: heat.gauntletId, heatOrder: heat.order, userId }))
+    ) {
+      virtualPunishDelta = punishmentDelta(basePool);
     }
 
-    const poolDelta = effectsEnabled ? (sumPoolDelta(heatEffects, basePool) + virtualPunishDelta) : 0;
-    const configuredPool = Math.max(1, Number(basePool) + poolDelta);
+    const poolDelta = effectsEnabled ? sumPoolDelta(heatEffects, basePool).poolDelta + virtualPunishDelta : 0;
+    const configuredPool = computeConfiguredPool(basePool, poolDelta);
 
     // Bonus roll tokens increase the total allowed rolls by 1 each.
     // Importantly, once a bonus roll is consumed, the resulting BONUS roll still occupies a slot.

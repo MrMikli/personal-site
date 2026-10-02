@@ -2,18 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { ensureHeatIsMutable } from "@/lib/heatGuards";
+import { punishmentDelta } from "@/lib/heatPool";
 
 export const dynamic = "force-dynamic";
 
 const ALLOWED_STATUSES = ["UNBEATEN", "BEATEN", "GIVEN_UP"];
 const TERMINAL_STATUSES = ["BEATEN", "GIVEN_UP"];
-
-function clampPoolMinus2(basePool) {
-  const base = Number(basePool);
-  if (!Number.isFinite(base) || base <= 0) return 0;
-  // Apply up to -2, but never below 1.
-  return -Math.min(2, Math.max(0, base - 1));
-}
 
 async function awardRewardPowerup({ gauntletId, userId }) {
   // 1..4 inclusive
@@ -198,7 +192,7 @@ export async function POST(request, { params }) {
           const base = nextHeat.defaultGameCounter;
           // If base pool is 1, punishment is unavailable (skip).
           if (Number(base) > 1) {
-            const delta = clampPoolMinus2(base);
+            const delta = punishmentDelta(base);
             const nextRollPool = Math.max(1, Number(base) + delta);
 
             // Punishment is one-time for the next heat. If a previous punishment exists

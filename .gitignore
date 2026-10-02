@@ -12,6 +12,7 @@
 
 # Next.js
 /.next/
+/.swc/
 /out/
 
 # Build outputs

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSession } from "../../../lib/session";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import SeedPlatformsClient from "./SeedPlatformsClient";
 import ManagePlatformClient from "./ManagePlatformClient";
