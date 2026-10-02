@@ -25,12 +25,12 @@ async function getRandomBannerSrc() {
       .filter((name) => /\.(png|jpe?g|webp|gif|avif)$/i.test(name))
       .sort((a, b) => a.localeCompare(b));
 
-    if (candidates.length === 0) return "/gauntlet-banners/boomer_sanae.png";
+    if (candidates.length === 0) return "/gauntlet-banners/sanae.png";
 
     const chosen = candidates[randomInt(0, candidates.length)];
     return `/gauntlet-banners/${encodeURIComponent(chosen)}`;
   } catch {
-    return "/gauntlet-banners/boomer_sanae.png";
+    return "/gauntlet-banners/sanae.png";
   }
 }
 
