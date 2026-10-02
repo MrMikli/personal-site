@@ -1,0 +1,8 @@
+// Shared by `npm run lint:md`, the Claude Code lint hook and the VS Code markdownlint extension.
+{
+  "config": {
+    // Same as the VS Code extension's default: long lines are fine.
+    "MD013": false
+  },
+  "ignores": ["node_modules/**", ".next/**"]
+}
