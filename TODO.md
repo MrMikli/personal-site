@@ -1,8 +1,6 @@
 # TODO / Ideas
 
-- Add release years to `GamePlatform` table instead of just storing the initial release date
-- Instead of just release region, tie language support into it (western release OR english language?)
-- Add themes, keywords, and genres to games
+- Instead of just release region, tie language support into western toggle 
 - Add filter for educational games (kids+educational themes on igdb?)
   - sports?
   - celebrity tie-in?
@@ -17,8 +15,10 @@
     2. Filter from series? (maybe publisher or developer, series might be too powerful, but this also might be too powerful)
     3. Filter rarity?
     4. Yoink someone elses game roll (steal or just copy idk) - possibly roll from previously picked games
-    5. Literally just pick a game!? (low %chance)
+    5. Literally just pick a game!? maybe it would roll a platform of the eligible platforms, then you could pick from any game that was an original for that console, or similar? (low %chance)
     6. Curated pick by other random participant (leader, loser?)
+- Change powerup roll to an interface instead of a website popup
+- Address PSP being full of re-releases
 - Remove veto power-up
 - Profile showcases - games beaten / custom awards
 - Add password reset lol
