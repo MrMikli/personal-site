@@ -49,4 +49,36 @@ describe("lib/igdb", () => {
     // 1 token fetch + 1 igdb call + 1 token refresh + 1 retry
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
+
+  test("igdbRequest waits and retries once on 429", async () => {
+    const statuses = [429, 200];
+    global.fetch = jest.fn(async (url, init) => {
+      if (String(url).includes("oauth2/token")) {
+        return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
+      }
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+      const status = statuses.shift();
+      return new Response(status === 200 ? JSON.stringify([{ id: 1 }]) : "Too Many Requests", { status });
+    });
+
+    const { igdbRequest } = await import("@/lib/igdb");
+
+    await expect(igdbRequest("games", "fields id;")).resolves.toEqual([{ id: 1 }]);
+    // 1 token fetch + 2 igdb calls
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  test("igdbRequest throws when the retry also fails", async () => {
+    global.fetch = jest.fn(async (url) => {
+      if (String(url).includes("oauth2/token")) {
+        return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
+      }
+      return new Response("down", { status: 503 });
+    });
+
+    const { igdbRequest } = await import("@/lib/igdb");
+
+    await expect(igdbRequest("games", "fields id;")).rejects.toThrow("IGDB request failed: 503 down");
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
 });

@@ -1,14 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { igdbRequest } from '@/lib/igdb';
-import {
-  buildGameCountBody,
-  buildGameQuery,
-  pickEarliestRelease,
-  toCoverBigUrl,
-  hasWesternRelease,
-  hasWesternReleaseForPlatform,
-} from '@/lib/igdbGames';
+import { buildGameCountBody, buildGameQuery } from '@/lib/igdbGames';
+import { clearPlatformGames, syncIgdbGamePage } from '@/lib/igdbSync';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -19,6 +13,11 @@ function parsePositiveInt(value, fallback) {
   return Math.floor(n);
 }
 
+/**
+ * Streams one chunk of a platform sync as server-sent events.
+ * ?clear=true removes the platform's games; otherwise one or more IGDB pages starting at ?offset are
+ * imported, and the final 'done' event tells the client whether to request the next offset.
+ */
 export async function GET(req, { params }) {
   const session = await getSession();
   const platformId = params?.platformId;
@@ -30,9 +29,6 @@ export async function GET(req, { params }) {
   const pageSize = Math.min(500, Math.max(25, parsePositiveInt(url.searchParams.get('pageSize'), 200)));
   const maxPages = Math.min(5, Math.max(1, parsePositiveInt(url.searchParams.get('maxPages'), 1)));
 
-  const clearCursor = url.searchParams.get('clearCursor') || null;
-  const clearBatchSize = Math.min(200, Math.max(10, parsePositiveInt(url.searchParams.get('clearBatchSize'), 50)));
-
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -43,7 +39,7 @@ export async function GET(req, { params }) {
 
       if (!session?.user?.isAdmin) {
         const isMaskedAdmin = !!session?.user?.isAdminActual && !!session?.user?.isAdminMasked;
-        send('error', {
+        send('sync-error', {
           message: isMaskedAdmin
             ? 'Admin is currently masked (viewing as non-admin). Disable "view as non-admin" to run sync.'
             : 'Unauthorized'
@@ -53,7 +49,7 @@ export async function GET(req, { params }) {
       }
 
       if (!platformId || typeof platformId !== 'string') {
-        send('error', { message: 'Invalid platform ID' });
+        send('sync-error', { message: 'Invalid platform ID' });
         controller.close();
         return;
       }
@@ -72,14 +68,14 @@ export async function GET(req, { params }) {
         });
 
         if (!platform) {
-          send('error', { message: 'Platform not found' });
+          send('sync-error', { message: 'Platform not found' });
           controller.close();
           return;
         }
 
         const sourceIgdbId = platform.igdbId ?? platform.parentPlatform?.igdbId ?? null;
         if (!sourceIgdbId) {
-          send('error', {
+          send('sync-error', {
             message:
               'This platform has no IGDB ID (and no parent platform with an IGDB ID), so it cannot be synced from IGDB.'
           });
@@ -87,77 +83,39 @@ export async function GET(req, { params }) {
           return;
         }
 
-        const yearStart = platform.yearStart ?? undefined;
-        const yearEnd = platform.yearEnd ?? undefined;
-
-        // Compute total count first for UI progress (best-effort)
-        const countWhere = buildGameCountBody({ platformIgdbId: sourceIgdbId, yearStart, yearEnd });
-        let totalCount = 0;
-        try {
-          const countRes = await igdbRequest('games/count', countWhere);
-          if (Array.isArray(countRes) && countRes[0]?.count != null) totalCount = countRes[0].count;
-          else if (typeof countRes?.count === 'number') totalCount = countRes.count;
-          else if (typeof countRes === 'number') totalCount = countRes;
-        } catch {}
-        send('total', { total: totalCount });
-
         if (clearFirst) {
-          // Phase 1: Clear existing data for this platform (chunked)
-          const where = { platforms: { some: { id: platform.id } } };
-
-          const batch = await prisma.game.findMany({
-            where,
-            orderBy: { id: 'asc' },
-            take: clearBatchSize,
-            ...(clearCursor
-              ? {
-                  cursor: { id: clearCursor },
-                  skip: 1
-                }
-              : {}),
-            select: { id: true, platforms: { select: { id: true } } }
-          });
-
-          let processedClear = 0;
-          let disconnected = 0;
-          let deleted = 0;
-          for (const g of batch) {
-            if ((g.platforms?.length || 0) <= 1) {
-              await prisma.game.delete({ where: { id: g.id } });
-              deleted++;
-            } else {
-              await prisma.game.update({
-                where: { id: g.id },
-                data: { platforms: { disconnect: { id: platform.id } } }
-              });
-              await prisma.gamePlatform.deleteMany({
-                where: { gameId: g.id, platformId: platform.id }
-              });
-              disconnected++;
-            }
-            processedClear++;
-            if (processedClear % 10 === 0) {
-              send('clear-progress', { processed: processedClear, disconnected, deleted, batchSize: batch.length });
-            }
-          }
-
-          const next = batch.length === clearBatchSize ? batch[batch.length - 1]?.id : null;
-          const done = !next;
-          send('clear-done', {
-            processed: processedClear,
-            disconnected,
-            deleted,
-            batchSize: batch.length,
-            nextCursor: next,
-            done
-          });
-          send('done', {
-            phase: 'clear',
-            clear: { processed: processedClear, disconnected, deleted, batchSize: batch.length, nextCursor: next, done }
-          });
+          const cleared = await clearPlatformGames(platform.id);
+          const clear = {
+            processed: cleared.deleted + cleared.disconnected + cleared.skipped,
+            disconnected: cleared.disconnected,
+            deleted: cleared.deleted,
+            skipped: cleared.skipped,
+            nextCursor: null,
+            done: true
+          };
+          send('clear-done', clear);
+          send('done', { phase: 'clear', clear });
           controller.close();
           return;
         }
+
+        const yearStart = platform.yearStart ?? undefined;
+        const yearEnd = platform.yearEnd ?? undefined;
+
+        // Total is only for UI progress, so ask IGDB once (on the first chunk) and never fail on it.
+        let totalCount = null;
+        if (offset === 0) {
+          const countWhere = buildGameCountBody({ platformIgdbId: sourceIgdbId, yearStart, yearEnd });
+          try {
+            const countRes = await igdbRequest('games/count', countWhere);
+            if (Array.isArray(countRes) && countRes[0]?.count != null) totalCount = countRes[0].count;
+            else if (typeof countRes?.count === 'number') totalCount = countRes.count;
+            else if (typeof countRes === 'number') totalCount = countRes;
+          } catch {}
+          if (totalCount != null) send('total', { total: totalCount });
+        }
+
+        const target = { platformId: platform.id, platformIgdbId: sourceIgdbId, yearStart, yearEnd };
 
         let processed = 0;
         let inserted = 0;
@@ -168,6 +126,8 @@ export async function GET(req, { params }) {
         let lastBatchCount = 0;
 
         while (page < maxPages) {
+          // IGDB allows 4 requests per second.
+          if (page > 0) await new Promise((resolve) => setTimeout(resolve, 300));
           page += 1;
           const body = buildGameQuery({
             platformIgdbId: sourceIgdbId,
@@ -177,85 +137,17 @@ export async function GET(req, { params }) {
             yearEnd
           });
           const games = await igdbRequest('games', body);
-          if (!Array.isArray(games) || games.length === 0) break;
+          if (!Array.isArray(games) || games.length === 0) {
+            lastBatchCount = 0;
+            break;
+          }
 
           lastBatchCount = games.length;
 
-          for (const g of games) {
-            const earliest = pickEarliestRelease(g.release_dates);
-            const coverUrl = toCoverBigUrl(g.cover);
-            const western = hasWesternRelease(g.release_dates);
-            const westernForPlatform = hasWesternReleaseForPlatform(g.release_dates, sourceIgdbId);
-
-            const existing = await prisma.game.findUnique({
-              where: { igdbId: g.id },
-              select: { id: true, platforms: { select: { id: true } } }
-            });
-
-            if (!existing) {
-              const created = await prisma.game.create({
-                data: {
-                  igdbId: g.id,
-                  name: g.name,
-                  slug: g.slug ?? null,
-                  coverUrl,
-                  releaseDateUnix: earliest?.unix ?? null,
-                  releaseDateHuman: earliest?.human ?? null,
-                  hasWesternRelease: western,
-                  platforms: { connect: { id: platform.id } }
-                },
-                select: { id: true }
-              });
-
-              await prisma.gamePlatform.upsert({
-                where: { gameId_platformId: { gameId: created.id, platformId: platform.id } },
-                update: { hasWesternRelease: westernForPlatform },
-                create: { gameId: created.id, platformId: platform.id, hasWesternRelease: westernForPlatform }
-              });
-              inserted++;
-            } else {
-              await prisma.game.update({
-                where: { igdbId: g.id },
-                data: {
-                  name: g.name,
-                  slug: g.slug ?? null,
-                  coverUrl,
-                  releaseDateUnix: earliest?.unix ?? null,
-                  releaseDateHuman: earliest?.human ?? null,
-                  hasWesternRelease: western
-                }
-              });
-
-              const alreadyLinked = existing.platforms.some((p) => p.id === platform.id);
-              if (!alreadyLinked) {
-                await prisma.game.update({
-                  where: { igdbId: g.id },
-                  data: { platforms: { connect: { id: platform.id } } }
-                });
-              }
-
-              await prisma.gamePlatform.upsert({
-                where: { gameId_platformId: { gameId: existing.id, platformId: platform.id } },
-                update: { hasWesternRelease: westernForPlatform },
-                create: { gameId: existing.id, platformId: platform.id, hasWesternRelease: westernForPlatform }
-              });
-              updated++;
-            }
-
-            processed++;
-            if (processed % 50 === 0) {
-              send('progress', {
-                page,
-                processed,
-                inserted,
-                updated,
-                pageCount: games.length,
-                total: totalCount,
-                offset: localOffset,
-                pageSize
-              });
-            }
-          }
+          const written = await syncIgdbGamePage(games, { platformsFor: () => [target] });
+          processed += games.length;
+          inserted += written.inserted;
+          updated += written.updated;
 
           send('progress', {
             page,
@@ -291,7 +183,7 @@ export async function GET(req, { params }) {
         controller.close();
       } catch (err) {
         console.error('IGDB sync stream error', err);
-        send('error', { message: err?.message ? String(err.message) : String(err) });
+        send('sync-error', { message: err?.message ? String(err.message) : String(err), retryable: true });
         controller.close();
       }
     }

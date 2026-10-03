@@ -32,6 +32,10 @@ export default function ManagePlatformClient({ platforms }) {
   const [bulkResult, setBulkResult] = useState(null);
   const [bulkError, setBulkError] = useState(null);
 
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillResult, setBackfillResult] = useState(null);
+  const [backfillError, setBackfillError] = useState(null);
+
   const options = useMemo(() => platforms.map(p => ({ value: p.id, label: formatName(p) })), [platforms]);
   const selected = useMemo(() => {
     if (!selectedOption) return null;
@@ -64,7 +68,7 @@ export default function ManagePlatformClient({ platforms }) {
     [platforms]
   );
 
-  const anyLoading = loading || bulkLoading || rollYearEndSaving;
+  const anyLoading = loading || bulkLoading || backfillLoading || rollYearEndSaving;
 
   const liveChunk = result?.chunk || null;
   const liveProcessed = (result?.processed || 0) + (liveChunk?.processed || 0);
@@ -119,26 +123,44 @@ export default function ManagePlatformClient({ platforms }) {
         resolve(data || {});
       });
 
-      es.addEventListener('error', (evt) => {
+      es.addEventListener('sync-error', (evt) => {
         const data = safeJsonParse(evt.data);
         cleanup();
-        reject(new Error(data?.message || 'Sync error'));
+        const err = new Error(data?.message || 'Sync error');
+        err.retryable = !!data?.retryable;
+        reject(err);
       });
 
       es.onerror = () => {
         cleanup();
-        reject(
-          new Error(
-            'Sync connection failed. Check DevTools → Network for the /stream request status, and check Vercel function logs for details.'
-          )
+        const err = new Error(
+          'Sync connection failed. Check DevTools → Network for the /stream request status, and check Vercel function logs for details.'
         );
+        err.retryable = true;
+        reject(err);
       };
     });
   }
 
+  /**
+   * Runs one stream request, retrying after 1s and then 3s when the failure is marked retryable.
+   * Safe because every chunk is an idempotent upsert: running it twice gives the same result.
+   */
+  async function runEventSourceWithRetry(url, options) {
+    const delays = [1000, 3000];
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await runEventSource(url, options);
+      } catch (e) {
+        if (!e?.retryable || attempt >= delays.length) throw e;
+        await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+      }
+    }
+  }
+
   async function syncPlatformChunked(platformId, { onEvent, onChunkDone } = {}) {
-    // Smaller chunks for Vercel Hobby.
-    const pageSize = 100;
+    // One IGDB page (its maximum) per request; each page is a single database write.
+    const pageSize = 500;
     const maxPages = 1;
     let currentOffset = 0;
 
@@ -146,7 +168,7 @@ export default function ManagePlatformClient({ platforms }) {
 
     while (true) {
       const url = `/api/admin/igdb/sync-games/by-platform/${platformId}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
-      const done = await runEventSource(url, { onEvent });
+      const done = await runEventSourceWithRetry(url, { onEvent });
 
       if (done?.phase === 'sync') {
         onChunkDone?.(done);
@@ -163,6 +185,39 @@ export default function ManagePlatformClient({ platforms }) {
     return totals;
   }
 
+  /** Shows live progress of the chunk currently being synced for the selected platform. */
+  function onSyncEvent(type, data) {
+    if (type === 'total') {
+      setResult((prev) => ({ ...(prev || {}), total: data.total }));
+    }
+    if (type === 'progress') {
+      setResult((prev) => ({
+        ...(prev || {}),
+        chunk: {
+          page: data.page,
+          processed: data.processed,
+          inserted: data.inserted,
+          updated: data.updated,
+          pageCount: data.pageCount,
+          offset: data.offset,
+          pageSize: data.pageSize
+        }
+      }));
+    }
+  }
+
+  /** Folds a finished chunk's counts into the selected platform's running totals. */
+  function onSyncChunkDone(done) {
+    setResult((prev) => ({
+      ...(prev || {}),
+      processed: (prev?.processed || 0) + (done.processed || 0),
+      inserted: (prev?.inserted || 0) + (done.inserted || 0),
+      updated: (prev?.updated || 0) + (done.updated || 0),
+      total: typeof done.total === 'number' ? done.total : prev?.total,
+      chunk: null
+    }));
+  }
+
   async function handleSync() {
     if (!selected) return;
     if (!canSyncSelected) {
@@ -174,42 +229,43 @@ export default function ManagePlatformClient({ platforms }) {
     setResult({ processed: 0, inserted: 0, updated: 0, chunk: null });
 
     try {
-      await syncPlatformChunked(selected.id, {
-        onEvent: (type, data) => {
-          if (type === 'total') {
-            setResult((prev) => ({ ...(prev || {}), total: data.total }));
-          }
-          if (type === 'progress') {
-            setResult((prev) => ({
-              ...(prev || {}),
-              chunk: {
-                page: data.page,
-                processed: data.processed,
-                inserted: data.inserted,
-                updated: data.updated,
-                pageCount: data.pageCount,
-                offset: data.offset,
-                pageSize: data.pageSize,
-                total: data.total
-              }
-            }));
-          }
-        },
-        onChunkDone: (done) => {
-          setResult((prev) => ({
-            ...(prev || {}),
-            processed: (prev?.processed || 0) + (done.processed || 0),
-            inserted: (prev?.inserted || 0) + (done.inserted || 0),
-            updated: (prev?.updated || 0) + (done.updated || 0),
-            total: typeof done.total === 'number' ? done.total : prev?.total,
-            chunk: null
-          }));
-        }
-      });
+      await syncPlatformChunked(selected.id, { onEvent: onSyncEvent, onChunkDone: onSyncChunkDone });
     } catch (e) {
       setError(e?.message || 'Sync error');
     } finally {
       setLoading(false);
+    }
+  }
+
+  /**
+   * Refreshes the IGDB data of every game already in the database.
+   * Follows the server's cursor page by page and adds each page's counts to the running totals.
+   */
+  async function handleBackfill() {
+    if (anyLoading) return;
+    setBackfillLoading(true);
+    setBackfillError(null);
+    setBackfillResult({ processed: 0, updated: 0, missing: 0, total: null, done: false });
+
+    try {
+      let cursor = 0;
+      while (true) {
+        const done = await runEventSourceWithRetry(`/api/admin/igdb/backfill-games/stream?cursor=${cursor}`);
+        setBackfillResult((prev) => ({
+          processed: (prev?.processed || 0) + (done.processed || 0),
+          updated: (prev?.updated || 0) + (done.updated || 0),
+          missing: (prev?.missing || 0) + (done.missing || 0),
+          total: typeof done.total === 'number' ? done.total : prev?.total,
+          done: !done.hasMore
+        }));
+        if (!done?.hasMore || typeof done?.nextCursor !== 'number') break;
+        cursor = done.nextCursor;
+      }
+      router.refresh();
+    } catch (e) {
+      setBackfillError(e?.message || 'Backfill error');
+    } finally {
+      setBackfillLoading(false);
     }
   }
 
@@ -330,98 +386,16 @@ export default function ManagePlatformClient({ platforms }) {
       inserted: 0,
       updated: 0,
       chunk: null,
-      clear: { processed: 0, disconnected: 0, deleted: 0, nextCursor: null, done: false, lastBatchSize: 0 }
+      clear: { processed: 0, disconnected: 0, deleted: 0, skipped: 0, done: false }
     });
 
-    const clearBatchSize = 50;
-    let cursor = null;
-
     try {
-      // Clear in chunks first
-      while (true) {
-        const url = `/api/admin/igdb/sync-games/by-platform/${selected.id}/stream?clear=true&clearBatchSize=${clearBatchSize}${cursor ? `&clearCursor=${encodeURIComponent(cursor)}` : ''}`;
-        const done = await runEventSource(url, {
-          onEvent: (type, data) => {
-            if (type === 'clear-progress') {
-              setResult((prev) => ({
-                ...(prev || {}),
-                clear: {
-                  ...(prev?.clear || {}),
-                  lastBatchSize: data.batchSize ?? prev?.clear?.lastBatchSize ?? 0,
-                  processedInBatch: data.processed ?? prev?.clear?.processedInBatch ?? 0,
-                  disconnectedInBatch: data.disconnected ?? prev?.clear?.disconnectedInBatch ?? 0,
-                  deletedInBatch: data.deleted ?? prev?.clear?.deletedInBatch ?? 0
-                }
-              }));
-            }
-            if (type === 'clear-done') {
-              setResult((prev) => ({
-                ...(prev || {}),
-                clear: {
-                  ...(prev?.clear || {}),
-                  processed: (prev?.clear?.processed || 0) + (data.processed || 0),
-                  disconnected: (prev?.clear?.disconnected || 0) + (data.disconnected || 0),
-                  deleted: (prev?.clear?.deleted || 0) + (data.deleted || 0),
-                  nextCursor: data.nextCursor ?? null,
-                  done: !!data.done,
-                  lastBatchSize: data.batchSize ?? prev?.clear?.lastBatchSize ?? 0
-                }
-              }));
-            }
-          }
-        });
+      const cleared = await runEventSource(
+        `/api/admin/igdb/sync-games/by-platform/${selected.id}/stream?clear=true`
+      );
+      setResult((prev) => ({ ...(prev || {}), clear: { ...(cleared?.clear || {}), done: true } }));
 
-        const clear = done?.clear;
-        if (!clear) break;
-        if (clear.done) break;
-        cursor = clear.nextCursor || null;
-        if (!cursor) break;
-      }
-
-      // Then sync in chunks
-      const pageSize = 100;
-      const maxPages = 1;
-      let currentOffset = 0;
-
-      while (true) {
-        const url = `/api/admin/igdb/sync-games/by-platform/${selected.id}/stream?offset=${currentOffset}&pageSize=${pageSize}&maxPages=${maxPages}`;
-        const done = await runEventSource(url, {
-          onEvent: (type, data) => {
-            if (type === 'total') {
-              setResult((prev) => ({ ...(prev || {}), total: data.total }));
-            }
-            if (type === 'progress') {
-              setResult((prev) => ({
-                ...(prev || {}),
-                chunk: {
-                  page: data.page,
-                  processed: data.processed,
-                  inserted: data.inserted,
-                  updated: data.updated,
-                  pageCount: data.pageCount,
-                  offset: data.offset,
-                  pageSize: data.pageSize,
-                  total: data.total
-                }
-              }));
-            }
-          }
-        });
-
-        if (done?.phase === 'sync') {
-          setResult((prev) => ({
-            ...(prev || {}),
-            processed: (prev?.processed || 0) + (done.processed || 0),
-            inserted: (prev?.inserted || 0) + (done.inserted || 0),
-            updated: (prev?.updated || 0) + (done.updated || 0),
-            total: typeof done.total === 'number' ? done.total : prev?.total,
-            chunk: null
-          }));
-        }
-
-        if (!done?.hasMore || typeof done?.nextOffset !== 'number') break;
-        currentOffset = done.nextOffset;
-      }
+      await syncPlatformChunked(selected.id, { onEvent: onSyncEvent, onChunkDone: onSyncChunkDone });
     } catch (e) {
       setError(e?.message || 'Sync error');
     } finally {
@@ -467,7 +441,26 @@ export default function ManagePlatformClient({ platforms }) {
               ? 'Re-syncing all…'
               : `Re-sync all platforms with games (${platformsWithGames.length})`}
           </button>
+          <button onClick={handleBackfill} disabled={anyLoading}>
+            {backfillLoading ? 'Refreshing…' : 'Refresh IGDB data for existing games'}
+          </button>
         </div>
+        <div className={styles.note}>
+          Re-sync looks for new games on each platform. Refresh only updates games already here (genres, themes,
+          ratings, release years and so on) and is much faster.
+        </div>
+        {backfillResult && (
+          <div className={styles.result}>
+            <div>
+              Refreshed: {backfillResult.processed}
+              {typeof backfillResult.total === 'number' ? ` / ${backfillResult.total}` : ''}
+              {backfillResult.done ? ' (done)' : ''}
+            </div>
+            <div>Updated: {backfillResult.updated}</div>
+            <div>No longer on IGDB (left as is): {backfillResult.missing}</div>
+          </div>
+        )}
+        {backfillError && <div className={styles.error}>Error: {backfillError}</div>}
         {bulkResult && (
           <div className={styles.result}>
             <div>
@@ -479,7 +472,7 @@ export default function ManagePlatformClient({ platforms }) {
             <div>Updated: {liveBulkUpdated}</div>
             {bulkResult.currentChunk && (
               <div>
-                Current chunk: offset {bulkResult.currentChunk.offset ?? 0} (processed {bulkResult.currentChunk.processed ?? 0} / {bulkResult.currentChunk.total ?? '?'})
+                Current chunk: offset {bulkResult.currentChunk.offset ?? 0} (processed {bulkResult.currentChunk.processed ?? 0})
               </div>
             )}
             {(bulkResult.errors?.length || 0) > 0 && (
@@ -662,10 +655,10 @@ export default function ManagePlatformClient({ platforms }) {
               {result.clear && (
                 <div className={styles.clearBox}>
                   <div className={styles.clearTitle}>Clearing existing data</div>
-                  <div>Total to process: {result.clear.total ?? 0}</div>
-                  <div>Processed: {result.clear.processed ?? 0}</div>
-                  <div>Disconnected: {result.clear.disconnected ?? 0}</div>
-                  <div>Deleted (orphans): {result.clear.deleted ?? 0}</div>
+                  <div>{result.clear.done ? 'Done' : 'Working…'}</div>
+                  <div>Deleted: {result.clear.deleted ?? 0}</div>
+                  <div>Unlinked (also on other platforms): {result.clear.disconnected ?? 0}</div>
+                  <div>Kept (rolled or picked by a player): {result.clear.skipped ?? 0}</div>
                 </div>
               )}
               <div>Processed: {liveProcessed}{typeof result.total === 'number' ? ` / ${result.total}` : ''}</div>
@@ -673,7 +666,7 @@ export default function ManagePlatformClient({ platforms }) {
               <div>Updated: {liveUpdated}</div>
               {result.chunk && (
                 <div>
-                  Current chunk: offset {result.chunk.offset ?? 0} (processed {result.chunk.processed ?? 0} / {result.chunk.total ?? '?'})
+                  Current chunk: offset {result.chunk.offset ?? 0} (processed {result.chunk.processed ?? 0})
                 </div>
               )}
               {result.chunk?.page && (

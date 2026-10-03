@@ -87,6 +87,13 @@ model GamePlatform {
   platformId        String
   hasWesternRelease Boolean @default(false)
 
+  // Earliest release on this platform according to IGDB release_dates, ignoring digital
+  // re-releases (status 35). For a year-range variant, the earliest release inside its range.
+  releaseYear      Int?
+  releaseDateUnix  Int?
+  // Distinct IGDB release_date_regions ids for this platform (1 europe, 2 north_america, 5 japan, 8 worldwide, ...)
+  releaseRegionIds Int[] @default([])
+
   game     Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
   platform Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
 
@@ -111,6 +118,44 @@ model Game {
   // Whether this game had a Western-region release (NA/EU/AU/Worldwide) according to IGDB
   hasWesternRelease Boolean @default(false)
 
+  // IGDB page for the game
+  url String?
+
+  // IGDB ids. Names live in IgdbTag under the matching kind; ids overlap between kinds.
+  genreIds       Int[]   @default([])
+  themeIds       Int[]   @default([])
+  keywordIds     Int[]   @default([])
+  gameModeIds    Int[]   @default([])
+  perspectiveIds Int[]   @default([])
+  collectionIds  Int[]   @default([])
+  franchiseIds   Int[]   @default([])
+  // IgdbTag kind COMPANY, split by role on the game
+  developerIds   Int[]   @default([])
+  publisherIds   Int[]   @default([])
+  porterIds      Int[]   @default([])
+  // IgdbTag kind LANGUAGE: any audio, subtitle or interface support
+  languageIds    Int[]   @default([])
+  hasEnglish     Boolean @default(false)
+
+  // IGDB ratings (0-100): users, critics, and both combined
+  rating                Float?
+  ratingCount           Int?
+  aggregatedRating      Float?
+  aggregatedRatingCount Int?
+  totalRating           Float?
+  totalRatingCount      Int?
+
+  // IGDB popularity_primitives (types 1-4). Small relative scores that IGDB recalculates.
+  popVisits          Float?
+  popWantToPlay      Float?
+  popPlaying         Float?
+  popPlayed          Float?
+  popularitySyncedAt DateTime?
+
+  // The IGDB response this row was built from, so new columns can be derived without another sync
+  igdbData     Json?
+  igdbSyncedAt DateTime?
+
   platforms         Platform[]
   gamePlatforms     GamePlatform[]
   // Per-user selected game for a heat
@@ -122,6 +167,42 @@ model Game {
   updatedAt DateTime @updatedAt
 
   @@index([name])
+  @@index([genreIds], type: Gin)
+  @@index([themeIds], type: Gin)
+  @@index([keywordIds], type: Gin)
+  @@index([collectionIds], type: Gin)
+  @@index([franchiseIds], type: Gin)
+  @@index([developerIds], type: Gin)
+  @@index([publisherIds], type: Gin)
+  @@index([totalRatingCount])
+  @@index([popPlayed])
+}
+
+enum IgdbTagKind {
+  GENRE
+  THEME
+  KEYWORD
+  GAME_MODE
+  PERSPECTIVE
+  COLLECTION
+  FRANCHISE
+  COMPANY
+  LANGUAGE
+}
+
+// Names for the IGDB ids stored on Game. Only holds tags that appear on a synced game.
+model IgdbTag {
+  id     String      @id @default(cuid())
+  kind   IgdbTagKind
+  igdbId Int
+  name   String
+  slug   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, igdbId])
+  @@index([kind, name])
 }
 
 model Gauntlet {

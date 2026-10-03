@@ -2,6 +2,7 @@ import { GET } from "@/app/api/admin/igdb/sync-games/by-platform/[platformId]/st
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { igdbRequest } from "@/lib/igdb";
+import { clearPlatformGames, syncIgdbGamePage } from "@/lib/igdbSync";
 
 jest.mock("@/lib/session", () => ({
   getSession: jest.fn()
@@ -9,10 +10,13 @@ jest.mock("@/lib/session", () => ({
 
 jest.mock("@/lib/prisma", () => ({
   prisma: {
-    platform: { findUnique: jest.fn() },
-    game: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
-    gamePlatform: { deleteMany: jest.fn(), upsert: jest.fn() }
+    platform: { findUnique: jest.fn() }
   }
+}));
+
+jest.mock("@/lib/igdbSync", () => ({
+  clearPlatformGames: jest.fn(),
+  syncIgdbGamePage: jest.fn()
 }));
 
 jest.mock("@/lib/igdb", () => ({
@@ -53,7 +57,7 @@ describe("/api/admin/igdb/sync-games/by-platform/[platformId]/stream", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("text/event-stream");
-    expect(ev).toEqual([{ event: "error", data: { message: "Unauthorized" } }]);
+    expect(ev).toEqual([{ event: "sync-error", data: { message: "Unauthorized" } }]);
     expect(prisma.platform.findUnique).not.toHaveBeenCalled();
   });
 
@@ -62,7 +66,7 @@ describe("/api/admin/igdb/sync-games/by-platform/[platformId]/stream", () => {
 
     const { events: ev } = await run();
 
-    expect(ev[0].event).toBe("error");
+    expect(ev[0].event).toBe("sync-error");
     expect(ev[0].data.message).toContain("masked");
   });
 
@@ -72,7 +76,7 @@ describe("/api/admin/igdb/sync-games/by-platform/[platformId]/stream", () => {
 
     const { events: ev } = await run();
 
-    expect(ev).toEqual([{ event: "error", data: { message: "Platform not found" } }]);
+    expect(ev).toEqual([{ event: "sync-error", data: { message: "Platform not found" } }]);
   });
 
   test("refuses a variant with no IGDB id on it or its parent", async () => {
@@ -81,12 +85,12 @@ describe("/api/admin/igdb/sync-games/by-platform/[platformId]/stream", () => {
 
     const { events: ev } = await run();
 
-    expect(ev[0].event).toBe("error");
+    expect(ev[0].event).toBe("sync-error");
     expect(ev[0].data.message).toContain("no IGDB ID");
     expect(igdbRequest).not.toHaveBeenCalled();
   });
 
-  test("syncs a page using the parent's IGDB id: inserts new games and updates existing ones", async () => {
+  test("syncs a page using the parent's IGDB id and writes it in one call", async () => {
     getSession.mockResolvedValueOnce({ user: { isAdmin: true } });
     prisma.platform.findUnique.mockResolvedValueOnce({
       id: "p1",
@@ -95,22 +99,12 @@ describe("/api/admin/igdb/sync-games/by-platform/[platformId]/stream", () => {
       yearEnd: 1999,
       parentPlatform: { igdbId: 6 }
     });
-    igdbRequest
-      .mockResolvedValueOnce([{ count: 2 }])
-      .mockResolvedValueOnce([
-        {
-          id: 101,
-          name: "New Game",
-          slug: "new-game",
-          cover: { url: "//images.igdb.com/igdb/image/upload/t_thumb/abc.jpg" },
-          release_dates: [{ date: 820454400, human: "1996", platform: 6, release_region: 2 }]
-        },
-        { id: 102, name: "Old Game", release_dates: [] }
-      ]);
-    prisma.game.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: "g2", platforms: [{ id: "p1" }] });
-    prisma.game.create.mockResolvedValueOnce({ id: "g1" });
+    const games = [
+      { id: 101, name: "New Game", slug: "new-game", release_dates: [{ date: 820454400, platform: 6, release_region: 2 }] },
+      { id: 102, name: "Old Game", release_dates: [] }
+    ];
+    igdbRequest.mockResolvedValueOnce([{ count: 2 }]).mockResolvedValueOnce(games);
+    syncIgdbGamePage.mockResolvedValueOnce({ processed: 2, inserted: 1, updated: 1 });
 
     const { events: ev } = await run(`${BASE}?pageSize=50`);
 
@@ -120,49 +114,53 @@ describe("/api/admin/igdb/sync-games/by-platform/[platformId]/stream", () => {
     expect(gamesCall[1]).toContain("release_dates.platform = 6");
     expect(gamesCall[1]).toContain("limit 50;");
 
-    expect(prisma.game.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          igdbId: 101,
-          coverUrl: "https://images.igdb.com/igdb/image/upload/t_cover_big/abc.jpg",
-          hasWesternRelease: true,
-          platforms: { connect: { id: "p1" } }
-        })
-      })
-    );
-    expect(prisma.gamePlatform.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ create: { gameId: "g1", platformId: "p1", hasWesternRelease: true } })
-    );
-    // Already linked to this platform: updated, but not connected again.
-    expect(prisma.game.update).toHaveBeenCalledTimes(1);
+    expect(syncIgdbGamePage).toHaveBeenCalledTimes(1);
+    const [writtenGames, options] = syncIgdbGamePage.mock.calls[0];
+    expect(writtenGames).toBe(games);
+    // The variant reads release dates through its parent's IGDB id, limited to its year range.
+    expect(options.platformsFor(games[0])).toEqual([
+      { platformId: "p1", platformIgdbId: 6, yearStart: 1994, yearEnd: 1999 }
+    ]);
 
     expect(ev[0]).toEqual({ event: "total", data: { total: 2 } });
     expect(ev.at(-1)).toMatchObject({
       event: "done",
-      data: { phase: "sync", processed: 2, inserted: 1, updated: 1, hasMore: false, nextOffset: null }
+      data: { phase: "sync", processed: 2, inserted: 1, updated: 1, hasMore: false, nextOffset: null, total: 2 }
     });
   });
 
-  test("clear mode deletes single-platform games and unlinks shared ones", async () => {
+  test("later chunks skip the IGDB count and report the next offset", async () => {
     getSession.mockResolvedValueOnce({ user: { isAdmin: true } });
     prisma.platform.findUnique.mockResolvedValueOnce({ id: "p1", igdbId: 7, parentPlatform: null });
-    igdbRequest.mockResolvedValueOnce([{ count: 0 }]);
-    prisma.game.findMany.mockResolvedValueOnce([
-      { id: "g1", platforms: [{ id: "p1" }] },
-      { id: "g2", platforms: [{ id: "p1" }, { id: "p2" }] }
-    ]);
+    const games = Array.from({ length: 25 }, (_, i) => ({ id: i + 1, name: `Game ${i + 1}` }));
+    igdbRequest.mockResolvedValueOnce(games);
+    syncIgdbGamePage.mockResolvedValueOnce({ processed: 25, inserted: 0, updated: 25 });
+
+    const { events: ev } = await run(`${BASE}?offset=25&pageSize=25`);
+
+    expect(igdbRequest).toHaveBeenCalledTimes(1);
+    expect(igdbRequest.mock.calls[0][0]).toBe("games");
+    expect(igdbRequest.mock.calls[0][1]).toContain("offset 25;");
+    expect(ev.map((e) => e.event)).toEqual(["progress", "done"]);
+    expect(ev.at(-1).data).toMatchObject({ hasMore: true, nextOffset: 50, total: null });
+  });
+
+  test("clear mode clears in one call without asking IGDB", async () => {
+    getSession.mockResolvedValueOnce({ user: { isAdmin: true } });
+    prisma.platform.findUnique.mockResolvedValueOnce({ id: "p1", igdbId: 7, parentPlatform: null });
+    clearPlatformGames.mockResolvedValueOnce({ deleted: 3, disconnected: 2, skipped: 1 });
 
     const { events: ev } = await run(`${BASE}?clear=true`);
 
-    expect(prisma.game.delete).toHaveBeenCalledWith({ where: { id: "g1" } });
-    expect(prisma.game.update).toHaveBeenCalledWith({
-      where: { id: "g2" },
-      data: { platforms: { disconnect: { id: "p1" } } }
-    });
-    expect(prisma.gamePlatform.deleteMany).toHaveBeenCalledWith({ where: { gameId: "g2", platformId: "p1" } });
-    expect(ev.at(-1)).toMatchObject({
+    expect(clearPlatformGames).toHaveBeenCalledWith("p1");
+    expect(igdbRequest).not.toHaveBeenCalled();
+    expect(syncIgdbGamePage).not.toHaveBeenCalled();
+    expect(ev.at(-1)).toEqual({
       event: "done",
-      data: { phase: "clear", clear: { deleted: 1, disconnected: 1, done: true } }
+      data: {
+        phase: "clear",
+        clear: { processed: 6, deleted: 3, disconnected: 2, skipped: 1, nextCursor: null, done: true }
+      }
     });
   });
 
@@ -173,6 +171,9 @@ describe("/api/admin/igdb/sync-games/by-platform/[platformId]/stream", () => {
 
     const { events: ev } = await run();
 
-    expect(ev.at(-1)).toEqual({ event: "error", data: { message: "IGDB request failed: 429" } });
+    expect(ev.at(-1)).toEqual({
+      event: "sync-error",
+      data: { message: "IGDB request failed: 429", retryable: true }
+    });
   });
 });
