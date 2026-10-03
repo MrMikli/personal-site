@@ -80,6 +80,32 @@ describe("lib/igdbGames", () => {
     expect(earliest).toEqual({ unix: 100, human: "A" });
   });
 
+  test("pickEarliestRelease skips entries without a date", () => {
+    // Shaped like Super Mario Bros. 3 (IGDB lists an undated "TBD" entry next to the real ones).
+    const earliest = pickEarliestRelease(
+      [
+        { id: 514575, date: 683424000, human: "Aug 29, 1991", platform: 18, date_format: 0, release_region: 1 },
+        { id: 514578, human: "TBD", platform: 18, date_format: 7, release_region: 10 },
+        { id: 514570, date: 593568000, human: "Oct 23, 1988", platform: 99, date_format: 0, release_region: 5 }
+      ],
+      593568000
+    );
+    expect(earliest).toEqual({ unix: 593568000, human: "Oct 23, 1988" });
+  });
+
+  test("pickEarliestRelease falls back to first_release_date when no entry is dated", () => {
+    expect(pickEarliestRelease([{ id: 1, human: "TBD", date_format: 7 }], 904780800))
+      .toEqual({ unix: 904780800, human: "Sep 03, 1998" });
+    expect(pickEarliestRelease(undefined, 904780800)).toEqual({ unix: 904780800, human: "Sep 03, 1998" });
+  });
+
+  test("pickEarliestRelease returns null when nothing is dated", () => {
+    expect(pickEarliestRelease([{ id: 1, human: "TBD", date_format: 7 }])).toBeNull();
+    expect(pickEarliestRelease([])).toBeNull();
+    expect(mapIgdbGame({ id: 1, name: "A", release_dates: [{ id: 1, human: "TBD" }] }))
+      .toMatchObject({ releaseDateUnix: null, releaseDateHuman: null });
+  });
+
   test("toCoverBigUrl normalizes scheme and size", () => {
     expect(toCoverBigUrl({ url: "//images.igdb.com/igdb/image/upload/t_thumb/abc.jpg" }))
       .toBe("https://images.igdb.com/igdb/image/upload/t_cover_big/abc.jpg");
